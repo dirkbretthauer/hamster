@@ -1,0 +1,127 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+                             https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>de.hamster</groupId>
+    <artifactId>teavm-prototype</artifactId>
+    <version>1.0-SNAPSHOT</version>
+    <packaging>war</packaging>
+
+    <name>Hamster Simulator – TeaVM Prototype</name>
+    <description>
+        Proof-of-concept that compiles the core HamsterSimulator domain model
+        (Terrain, SimulationModel, instruction processing) to JavaScript / WebAssembly
+        via TeaVM so students can run Hamster programs in a plain web browser.
+    </description>
+
+    <properties>
+        <maven.compiler.source>8</maven.compiler.source>
+        <maven.compiler.target>8</maven.compiler.target>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <teavm.version>0.10.1</teavm.version>
+    </properties>
+
+    <dependencies>
+        <!-- TeaVM class library (browser-compatible subset of the JDK) -->
+        <dependency>
+            <groupId>org.teavm</groupId>
+            <artifactId>teavm-classlib</artifactId>
+            <version>${teavm.version}</version>
+            <scope>provided</scope>
+        </dependency>
+
+        <!-- JSO: Java–JavaScript bridge annotations (@JSExport, @JSBody, etc.) -->
+        <dependency>
+            <groupId>org.teavm</groupId>
+            <artifactId>teavm-jso-apis</artifactId>
+            <version>${teavm.version}</version>
+            <scope>provided</scope>
+        </dependency>
+
+        <!-- Servlet API – only needed so Maven builds the WAR -->
+        <dependency>
+            <groupId>jakarta.servlet</groupId>
+            <artifactId>jakarta.servlet-api</artifactId>
+            <version>6.0.0</version>
+            <scope>provided</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <!-- 1. TeaVM Maven plugin – compiles Java → JavaScript module -->
+            <plugin>
+                <groupId>org.teavm</groupId>
+                <artifactId>teavm-maven-plugin</artifactId>
+                <version>${teavm.version}</version>
+                <executions>
+                    <execution>
+                        <id>compile-to-javascript</id>
+                        <goals>
+                            <goal>compile</goal>
+                        </goals>
+                        <phase>process-classes</phase>
+                        <configuration>
+                            <!--
+                                Entry point: only the main() method is strictly required
+                                by TeaVM; the @JSExport-annotated static methods on
+                                EngineExports are what the browser harness actually calls.
+                            -->
+                            <mainClass>de.hamster.web.Main</mainClass>
+
+                            <!--
+                                Output directory inside the WAR so the generated JS
+                                is served alongside index.html.
+                            -->
+                            <targetDirectory>${project.basedir}/src/main/webapp/js</targetDirectory>
+                            <targetFileName>hamster-engine.js</targetFileName>
+
+                            <!--
+                                ES2015 module output lets index.html use:
+                                  import { ... } from './js/hamster-engine.js';
+                            -->
+                            <moduleType>ES2015</moduleType>
+                            <targetType>JAVASCRIPT</targetType>
+
+                            <!--
+                                optimizationLevel: SIMPLE keeps stack traces readable
+                                during prototyping; switch to ADVANCED for production.
+                            -->
+                            <optimizationLevel>SIMPLE</optimizationLevel>
+                            <sourceMap>true</sourceMap>
+                            <debugInformationGenerated>true</debugInformationGenerated>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <!-- 2. WAR plugin – bundles everything into a deployable archive -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-war-plugin</artifactId>
+                <version>3.4.0</version>
+                <configuration>
+                    <failOnMissingWebXml>false</failOnMissingWebXml>
+                </configuration>
+            </plugin>
+
+            <!-- 3. Jetty plugin – run locally with: mvn jetty:run -->
+            <plugin>
+                <groupId>org.eclipse.jetty</groupId>
+                <artifactId>jetty-maven-plugin</artifactId>
+                <version>11.0.20</version>
+                <configuration>
+                    <httpConnector>
+                        <port>8080</port>
+                    </httpConnector>
+                    <webApp>
+                        <contextPath>/hamster</contextPath>
+                    </webApp>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>

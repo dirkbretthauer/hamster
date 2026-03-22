@@ -1,0 +1,11 @@
+D:\Projects\hamstersimulator-v29-06-eclipse\hamstersimulator-webapp\teavm-prototype\src\main\java\de\hamster\web\api\EngineExports.java
+D:\Projects\hamstersimulator-v29-06-eclipse\hamstersimulator-webapp\teavm-prototype\src\main\java\de\hamster\web\engine\HamsterActor.java
+D:\Projects\hamstersimulator-v29-06-eclipse\hamstersimulator-webapp\teavm-prototype\src\main\java\de\hamster\web\engine\HamsterModel.java
+D:\Projects\hamstersimulator-v29-06-eclipse\hamstersimulator-webapp\teavm-prototype\src\main\java\de\hamster\web\engine\HamsterTerrain.java
+D:\Projects\hamstersimulator-v29-06-eclipse\hamstersimulator-webapp\teavm-prototype\src\main\java\de\hamster\web\engine\WebTerminal.java
+D:\Projects\hamstersimulator-v29-06-eclipse\hamstersimulator-webapp\teavm-prototype\src\main\java\de\hamster\web\exceptions\HamsterBaseException.java
+D:\Projects\hamstersimulator-v29-06-eclipse\hamstersimulator-webapp\teavm-prototype\src\main\java\de\hamster\web\exceptions\InitException.java
+D:\Projects\hamstersimulator-v29-06-eclipse\hamstersimulator-webapp\teavm-prototype\src\main\java\de\hamster\web\exceptions\MouthEmptyException.java
+D:\Projects\hamstersimulator-v29-06-eclipse\hamstersimulator-webapp\teavm-prototype\src\main\java\de\hamster\web\exceptions\TileEmptyException.java
+D:\Projects\hamstersimulator-v29-06-eclipse\hamstersimulator-webapp\teavm-prototype\src\main\java\de\hamster\web\exceptions\WallInFrontException.java
+D:\Projects\hamstersimulator-v29-06-eclipse\hamstersimulator-webapp\teavm-prototype\src\main\java\de\hamster\web\Main.java

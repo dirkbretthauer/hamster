@@ -1,0 +1,11 @@
+de\hamster\web\exceptions\InitException.class
+de\hamster\web\api\EngineExports.class
+de\hamster\web\engine\WebTerminal.class
+de\hamster\web\engine\HamsterActor.class
+de\hamster\web\Main.class
+de\hamster\web\exceptions\MouthEmptyException.class
+de\hamster\web\engine\HamsterTerrain.class
+de\hamster\web\exceptions\WallInFrontException.class
+de\hamster\web\exceptions\HamsterBaseException.class
+de\hamster\web\exceptions\TileEmptyException.class
+de\hamster\web\engine\HamsterModel.class
