@@ -188,6 +188,24 @@ Use this quick checklist in `index.html`:
 6. Confirm no duplicate step is executed before input is submitted.
 7. Press Reset and rerun to verify the flow remains stable.
 
+## License and attribution
+
+This project includes and adapts components from Hamster-Simulator.
+
+- License text is provided in `LICENSE.md`.
+- Upstream copyright notices and disclaimer text must be retained in source and
+    binary redistributions.
+- Use of Hamster-Simulator contributor/developer names for endorsement is not
+    permitted without prior written permission.
+- For derivative distributions, include a short change summary.
+
+Change summary for this derivative (high-level):
+
+- Browser-first TeaVM webapp integration and deployment packaging.
+- Hamster language lexer/parser/runner enhancements and tests.
+- Multi-file sample loading (`Load Folder`, companion `.ham` + `.ter`).
+- Legacy compatibility work for Band 2 sample corpus.
+
 ## Next steps
 
 1. **Decision**: run benchmarks to decide TeaVM-in-browser vs remote JVM service.
