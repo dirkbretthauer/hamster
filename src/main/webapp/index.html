@@ -376,6 +376,7 @@ let lastPaintCell  = null;
 let currentProgramFilename = 'program.ham';
 let loadedProgramFolder = '';
 let loadedProgramFiles = [];
+let resetProgramText = '';
 
 // ─── init canvas / log ───────────────────────────────────────
 initCanvas(canvas);
@@ -422,6 +423,7 @@ try {
     draw(initState);
     loadingMsg.style.display = 'none';
     setStatus('Ready');
+    resetProgramText = editor.value ?? '';
 } catch(e) {
     loadingMsg.textContent = 'Engine failed to load – see console';
     console.error(e);
@@ -591,6 +593,7 @@ btnSavePlus?.addEventListener('click', async () => {
 btnRun.addEventListener('click', () => {
     clearLog();
     engine.start();
+  resetProgramText = editor.value ?? '';
 
     // Compile the editor content
     const n = compileProgram(editor.value);
@@ -619,6 +622,7 @@ btnStep.addEventListener('click', () => {
     // First click: compile the script and snapshot the terrain
   if (!hasPendingProgram()) {
         engine.start();
+        resetProgramText = editor.value ?? '';
         compileProgram(editor.value);
         clearLog();
     }
@@ -644,6 +648,11 @@ btnStop.addEventListener('click', () => {
 btnReset.addEventListener('click', () => {
     stopProgram();
     const state = engine.reset();
+    if (typeof resetProgramText === 'string' && resetProgramText.length > 0) {
+      editor.value = resetProgramText;
+    }
+    overlay.classList.remove('visible');
+    termInput.value = '';
   draw(state);
     clearLog();
     btnRun.disabled  = false;
@@ -757,6 +766,7 @@ async function loadProgramFromFiles(files, options = {}) {
   }));
 
   editor.value = `${entryText}${companionTexts.join('')}`;
+  resetProgramText = editor.value ?? '';
   currentProgramFilename = ensureHamExtension(entryHam.name || currentProgramFilename);
 
   const loadedNames = [entryHam.name, ...companionHams.map(file => file.name)];
