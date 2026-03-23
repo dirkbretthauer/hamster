@@ -209,6 +209,26 @@ public class EngineExports {
         return model.toJson();
     }
 
+    /** Moves the default hamster to (col,row). Direction stays unchanged when dir is -1. */
+    @JSExport
+    public static String setDefaultHamster(int col, int row, int dir) {
+        requireModel();
+        try {
+            model.setDefaultHamster(col, row, dir);
+        } catch (HamsterBaseException e) {
+            throw new RuntimeException(e.getMessage());
+        }
+        return model.toJson();
+    }
+
+    /** Rotates the default hamster by the given number of quarter-turns. */
+    @JSExport
+    public static String rotateDefaultHamster(int turns) {
+        requireModel();
+        model.rotateDefaultHamster(turns);
+        return model.toJson();
+    }
+
     // ── terminal I/O ─────────────────────────────────────────────────────────
 
     /**
@@ -219,6 +239,20 @@ public class EngineExports {
     public static void provideInput(String value) {
         requireModel();
         model.getTerminal().provideInput(value);
+    }
+
+    /** Requests an integer from terminal input; JS should provide input when needed. */
+    @JSExport
+    public static int readInt(int hamsterId, String prompt) {
+        requireModel();
+        return model.getTerminal().readInt(hamsterId, prompt == null ? "" : prompt);
+    }
+
+    /** Requests a string from terminal input; JS should provide input when needed. */
+    @JSExport
+    public static String readString(int hamsterId, String prompt) {
+        requireModel();
+        return model.getTerminal().readString(hamsterId, prompt == null ? "" : prompt);
     }
 
     // ── state snapshot ─────────────────────────────────────────────────────────

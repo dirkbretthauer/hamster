@@ -9,10 +9,26 @@ const KEYWORDS = new Set([
     'void',
     'int',
     'boolean',
+    'do',
+    'for',
     'while',
     'if',
     'else',
     'return',
+    'new',
+    'null',
+    'class',
+    'interface',
+    'public',
+    'private',
+    'protected',
+    'static',
+    'final',
+    'package',
+    'import',
+    'extends',
+    'implements',
+    'this',
 ]);
 
 const SINGLE_CHAR_TOKENS = new Map([
@@ -20,6 +36,11 @@ const SINGLE_CHAR_TOKENS = new Map([
     [')', 'RPAREN'],
     ['{', 'LBRACE'],
     ['}', 'RBRACE'],
+    ['[', 'LBRACKET'],
+    [']', 'RBRACKET'],
+    ['.', 'DOT'],
+    ['?', 'QUESTION'],
+    [':', 'COLON'],
     [',', 'COMMA'],
     [';', 'SEMICOLON'],
 ]);
@@ -50,7 +71,9 @@ export const TokenType = Object.freeze({
     EOF: 'EOF',
     IDENTIFIER: 'IDENTIFIER',
     INTEGER: 'INTEGER',
+    STRING: 'STRING',
     BOOLEAN: 'BOOLEAN',
+    NULL: 'NULL',
     KEYWORD: 'KEYWORD',
     SYMBOL: 'SYMBOL',
     OPERATOR: 'OPERATOR',
@@ -112,10 +135,17 @@ export class HamsterLexer {
             if (text === 'true' || text === 'false') {
                 return new Token(TokenType.BOOLEAN, text === 'true', startLine, startColumn);
             }
+            if (text === 'null') {
+                return new Token(TokenType.NULL, null, startLine, startColumn);
+            }
             if (KEYWORDS.has(text)) {
                 return new Token(TokenType.KEYWORD, text, startLine, startColumn);
             }
             return new Token(TokenType.IDENTIFIER, text, startLine, startColumn);
+        }
+
+        if (ch === '"') {
+            return this.readString(startLine, startColumn);
         }
 
         const maybeTwoChar = ch + this.peek();
@@ -149,6 +179,30 @@ export class HamsterLexer {
             value += this.advance();
         }
         return value;
+    }
+
+    readString(startLine, startColumn) {
+        let value = '';
+        while (!this.isAtEnd()) {
+            const ch = this.advance();
+            if (ch === '"') {
+                return new Token(TokenType.STRING, value, startLine, startColumn);
+            }
+            if (ch === '\\') {
+                const escaped = this.advance();
+                switch (escaped) {
+                    case 'n': value += '\n'; break;
+                    case 'r': value += '\r'; break;
+                    case 't': value += '\t'; break;
+                    case '"': value += '"'; break;
+                    case '\\': value += '\\'; break;
+                    default: value += escaped; break;
+                }
+                continue;
+            }
+            value += ch;
+        }
+        throw new HamsterLexerError('Unterminated string literal', startLine, startColumn);
     }
 
     skipTrivia() {

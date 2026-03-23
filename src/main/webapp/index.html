@@ -99,6 +99,37 @@
       border-top: 1px solid #313244;
       flex-wrap: wrap;
     }
+    #sources-panel {
+      border-top: 1px solid #313244;
+      background: #151522;
+      padding: .5rem .8rem;
+      font-size: .78rem;
+      max-height: 180px;
+      overflow: auto;
+    }
+    #sources-folder {
+      color: #89b4fa;
+      margin-bottom: .35rem;
+      word-break: break-word;
+    }
+    #sources-list {
+      list-style: none;
+      display: grid;
+      gap: .2rem;
+    }
+    #sources-list li {
+      font-family: 'Consolas', 'Fira Code', monospace;
+      color: #cdd6f4;
+      border-left: 2px solid #45475a;
+      padding-left: .4rem;
+      word-break: break-word;
+    }
+    #sources-list li.file-ham { border-left-color: #a6e3a1; }
+    #sources-list li.file-ter { border-left-color: #f9e2af; }
+    #sources-empty {
+      color: #6c7086;
+      font-style: italic;
+    }
 
     /* ── log ─────────────────────────────────────────────── */
     #log-wrapper {
@@ -238,29 +269,34 @@
     <div class="panel-title">
       📝 Program
       <span style="font-size:.72rem;color:#6c7086;margin-left:auto">
-        Available: vor() linksUm() nimm() gib() vornFrei() kornDa() maulLeer()
+        Available: vor() linksUm() nimm() gib() vornFrei() kornDa() maulLeer() readInt() readString()
       </span>
     </div>
-    <textarea id="editor" spellcheck="false">// Example: collect all grains in row 0, then return
-// Uses while-loops and predicates
-
-while (vornFrei()) {
-  if (kornDa()) {
-    nimm();
+    <textarea id="editor" spellcheck="false">// Example hamster program in classic .ham syntax
+void main() {
+  while (vornFrei()) {
+    if (kornDa()) {
+      nimm();
+    }
+    vor();
   }
-  vor();
-}
-// Turn around
-linksUm();
-linksUm();</textarea>
+  linksUm();
+  linksUm();
+}</textarea>
     <div id="editor-controls">
       <button id="btn-run"  class="primary success">▶ Run</button>
       <button id="btn-step" class="primary">⏭ Step</button>
       <button id="btn-stop" class="danger" disabled>⏹ Stop</button>
       <button id="btn-reset">↺ Reset</button>
       <button id="btn-import-program">Load .ham</button>
+      <button id="btn-load-folder">Load Folder</button>
       <button id="btn-export-program">Save .ham</button>
       <button id="btn-save-plus">Save+ (.ham + .ter)</button>
+    </div>
+    <div id="sources-panel" aria-live="polite">
+      <div id="sources-folder">Folder: none</div>
+      <ul id="sources-list"></ul>
+      <div id="sources-empty">No source files loaded yet.</div>
     </div>
   </section>
 
@@ -318,6 +354,7 @@ const btnStep      = document.getElementById('btn-step');
 const btnStop      = document.getElementById('btn-stop');
 const btnReset     = document.getElementById('btn-reset');
 const btnImportProgram = document.getElementById('btn-import-program');
+const btnLoadFolder = document.getElementById('btn-load-folder');
 const btnExportProgram = document.getElementById('btn-export-program');
 const btnSavePlus  = document.getElementById('btn-save-plus');
 const speedRange   = document.getElementById('speed-range');
@@ -328,12 +365,17 @@ const cornInput    = document.getElementById('corn-amount');
 const hoverInfo    = document.getElementById('hover-info');
 const terrainFileInput = document.getElementById('terrain-file-input');
 const programFileInput = document.getElementById('program-file-input');
+const sourcesFolderEl = document.getElementById('sources-folder');
+const sourcesListEl = document.getElementById('sources-list');
+const sourcesEmptyEl = document.getElementById('sources-empty');
 
 let currentState   = null;
 let currentTool    = 'wall';
 let isDragging     = false;
 let lastPaintCell  = null;
 let currentProgramFilename = 'program.ham';
+let loadedProgramFolder = '';
+let loadedProgramFiles = [];
 
 // ─── init canvas / log ───────────────────────────────────────
 initCanvas(canvas);
@@ -467,31 +509,30 @@ btnSample.addEventListener('click', () => {
 // ─── program file workflow ─────────────────────────────────────────
 btnImportProgram?.addEventListener('click', () => programFileInput?.click());
 
+btnLoadFolder?.addEventListener('click', async () => {
+  if (typeof window.showDirectoryPicker !== 'function') {
+    setStatus('Load Folder not supported in this browser. Use Load .ham and select all files.');
+    return;
+  }
+  try {
+    const dirHandle = await window.showDirectoryPicker({ mode: 'read' });
+    await loadProgramFromDirectory(dirHandle);
+  } catch (err) {
+    if (err?.name === 'AbortError') {
+      setStatus('Folder selection cancelled');
+      return;
+    }
+    console.error(err);
+    setStatus(err.message || 'Could not load folder');
+  }
+});
+
 programFileInput?.addEventListener('change', async event => {
   const input = event.target;
   const files = Array.from(input.files || []);
   if (files.length === 0) return;
   try {
-    const hamFile = files.find(file => /\.ham$/i.test(file.name)) || files[0];
-    if (!hamFile) {
-      setStatus('No program file selected');
-      return;
-    }
-
-    editor.value = await hamFile.text();
-    currentProgramFilename = ensureHamExtension(hamFile.name || currentProgramFilename);
-
-    const baseName = getBasenameWithoutExtension(currentProgramFilename);
-    const companionTer = files.find(file => /\.ter$/i.test(file.name) && getBasenameWithoutExtension(file.name) === baseName);
-    if (companionTer) {
-      const terrainText = await companionTer.text();
-      const state = engine.loadTerrain(terrainText);
-      draw(state);
-      clearLog();
-      setStatus(`Loaded ${currentProgramFilename} + ${companionTer.name}`);
-    } else {
-      setStatus(`Program loaded: ${currentProgramFilename} (no companion .ter selected)`);
-    }
+    await loadProgramFromFiles(files);
   } catch (err) {
     console.error(err);
     setStatus(err.message || 'Could not load program file');
@@ -653,6 +694,24 @@ function setStatus(msg) {
     statusEl.textContent = msg;
 }
 
+function updateLoadedSourcesPanel() {
+  if (sourcesFolderEl) {
+    sourcesFolderEl.textContent = `Folder: ${loadedProgramFolder || 'none'}`;
+  }
+  if (!sourcesListEl || !sourcesEmptyEl) return;
+
+  sourcesListEl.innerHTML = '';
+  const files = Array.isArray(loadedProgramFiles) ? loadedProgramFiles : [];
+  for (const fileName of files) {
+    const li = document.createElement('li');
+    li.textContent = fileName;
+    if (/\.ham$/i.test(fileName)) li.classList.add('file-ham');
+    if (/\.ter$/i.test(fileName)) li.classList.add('file-ter');
+    sourcesListEl.appendChild(li);
+  }
+  sourcesEmptyEl.style.display = files.length === 0 ? 'block' : 'none';
+}
+
 function ensureHamExtension(name) {
   const base = String(name || '').trim() || 'program';
   return /\.ham$/i.test(base) ? base : `${base}.ham`;
@@ -667,6 +726,76 @@ function getBasenameWithoutExtension(name) {
   const value = String(name || '').trim();
   return value.replace(/\.[^.]+$/u, '');
 }
+
+async function loadProgramFromDirectory(dirHandle) {
+  const files = [];
+  for await (const [, entry] of dirHandle.entries()) {
+    if (entry.kind !== 'file') continue;
+    const lowerName = String(entry.name || '').toLowerCase();
+    if (!lowerName.endsWith('.ham') && !lowerName.endsWith('.ter')) continue;
+    const file = await entry.getFile();
+    files.push(file);
+  }
+  await loadProgramFromFiles(files, { fromFolder: true, folderName: dirHandle.name || 'folder' });
+}
+
+async function loadProgramFromFiles(files, options = {}) {
+  const fileList = Array.from(files || []);
+  const hamFiles = fileList.filter(file => /\.ham$/i.test(file.name));
+  if (hamFiles.length === 0) {
+    throw new Error('No .ham files found');
+  }
+
+  // Prefer the traditional entrypoint name when available.
+  const entryHam = hamFiles.find(file => /(^|[\\/])hamsterprogramm\.ham$/i.test(file.name)) || hamFiles[0];
+  const companionHams = hamFiles.filter(file => file !== entryHam);
+
+  const entryText = await entryHam.text();
+  const companionTexts = await Promise.all(companionHams.map(async file => {
+    const text = await file.text();
+    return `\n/* companion file: ${file.name} */\n${text}`;
+  }));
+
+  editor.value = `${entryText}${companionTexts.join('')}`;
+  currentProgramFilename = ensureHamExtension(entryHam.name || currentProgramFilename);
+
+  const loadedNames = [entryHam.name, ...companionHams.map(file => file.name)];
+  loadedProgramFolder = options.fromFolder ? (options.folderName || '') : '';
+  loadedProgramFiles = [...loadedNames];
+
+  const baseName = getBasenameWithoutExtension(currentProgramFilename);
+  let companionTer = fileList.find(file => /\.ter$/i.test(file.name) && getBasenameWithoutExtension(file.name) === baseName);
+  if (!companionTer) {
+    companionTer = fileList.find(file => /\.ter$/i.test(file.name));
+  }
+
+  if (companionTer) {
+    const terrainText = await companionTer.text();
+    const state = engine.loadTerrain(terrainText);
+    draw(state);
+    clearLog();
+    loadedProgramFiles.push(companionTer.name);
+    updateLoadedSourcesPanel();
+    setStatus(`Loaded ${currentProgramFilename} + ${companionHams.length} companion .ham + ${companionTer.name}`);
+    return;
+  }
+
+  updateLoadedSourcesPanel();
+
+  if (hamFiles.length === 1 && !options.fromFolder) {
+    setStatus(`Program loaded: ${currentProgramFilename}. Select multiple .ham files from the same folder to include dependencies.`);
+    return;
+  }
+
+  if (options.fromFolder) {
+    setStatus(`Loaded folder ${options.folderName}: ${currentProgramFilename} + ${companionHams.length} companion .ham (no .ter file found)`);
+    return;
+  }
+
+  setStatus(`Program loaded: ${currentProgramFilename} + ${companionHams.length} companion .ham (no companion .ter selected)`);
+}
+
+updateLoadedSourcesPanel();
 
 function downloadTextFile(filename, text) {
   const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });

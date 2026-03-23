@@ -56,6 +56,39 @@ public class HamsterModel {
     }
 
     /**
+     * Reposition the default hamster (id=-1). Optionally updates direction.
+     *
+     * @param col column index
+     * @param row row index
+     * @param dir direction 0..3, or -1 to keep the current direction
+     */
+    public void setDefaultHamster(int col, int row, int dir) {
+        if (terrain.getWall(col, row)) {
+            throw new InitException();
+        }
+        if (dir < -1 || dir > 3) {
+            throw new InitException();
+        }
+        HamsterActor h = terrain.getDefaultHamster();
+        h.setXY(col, row);
+        if (dir >= 0) {
+            h.setDir(dir);
+        }
+        notify(-1, "setDefaultHamster(" + row + "," + col + ")");
+    }
+
+    /**
+     * Rotate the default hamster by the given number of quarter turns.
+     * Positive values rotate clockwise, negative values counter-clockwise.
+     */
+    public void rotateDefaultHamster(int turns) {
+        HamsterActor h = terrain.getDefaultHamster();
+        int dir = ((h.getDir() + (turns % 4)) % 4 + 4) % 4;
+        h.setDir(dir);
+        notify(-1, "rotateDefaultHamster(" + turns + ")");
+    }
+
+    /**
      * Snapshot terrain + hamsters so {@link #reset()} can restore them.
      * Must be called before executing a student program.
      */

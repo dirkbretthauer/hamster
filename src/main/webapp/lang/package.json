@@ -1,3 +1,6 @@
 {
-  "type": "module"
+  "type": "module",
+  "scripts": {
+    "test": "node hamster-lexer.test.mjs && node hamster-parser.test.mjs && node hamster-runner.test.mjs"
+  }
 }

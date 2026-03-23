@@ -57,3 +57,12 @@ test('handles comments and multi-character operators', () => {
 test('throws on unterminated block comment', () => {
     assert.throws(() => lex('/* unterminated'), /Unterminated block comment/);
 });
+
+test('lexes member/index symbols and string literals', () => {
+    const tokens = withoutEof(lex('obj.arr[0] = new Foo("bar");'));
+    const values = tokens.map(t => t.value);
+    assert.deepStrictEqual(values, [
+        'obj', '.', 'arr', '[', '0', ']', '=', 'new', 'Foo', '(', 'bar', ')', ';'
+    ]);
+    assert.equal(tokens[10].type, TokenType.STRING);
+});
