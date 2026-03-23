@@ -32,8 +32,56 @@ teavm-prototype/
     └── webapp/
         ├── index.html                    TeaVM build – interactive demo
         ├── hamster-ui.js                 Canvas renderer + program runner
+                ├── lang/
+                │   ├── hamster-lexer.js          Lexer for legacy .ham syntax
+                │   ├── hamster-parser.js         Parser (+ compatibility mode)
+                │   ├── hamster-runner.js         AST runner/interpreter
+                │   ├── hamster-lexer.test.mjs    Node tests
+                │   ├── hamster-parser.test.mjs   Node tests
+                │   ├── hamster-runner.test.mjs   Node tests
+                │   ├── validate-band2.mjs        Batch parser validation script
+                │   └── package.json              Test script entrypoint
         └── index-cheerpj.html            CheerpJ fallback (loads original JAR)
 ```
+
+## Recent UX updates
+
+- `Load Folder` button imports all `.ham` files from one selected folder.
+- The same flow also imports a matching `.ter` (same base name as the entry
+    program when available, otherwise the first `.ter` in the folder).
+- New **Loaded Sources** panel shows the selected folder and every loaded
+    source/terrain file.
+- `Load .ham` (multi-select) now also supports entry + companion `.ham` files
+    in one action.
+
+These changes are implemented in `src/main/webapp/index.html`.
+
+## Legacy compatibility status
+
+### What currently works
+
+- Legacy Band 2 corpus parsing in compatibility mode (`validate-band2.mjs`)
+    with full parse coverage.
+- Procedural and common object-style hamster program execution in the browser:
+    object construction, member calls, array indexing/assignment, terminal input,
+    and common Hamster constants (`NORD`, `OST`, `SUED`, `WEST`).
+- Folder-based companion file loading for multi-file samples.
+
+### Current limits
+
+- The runtime is not yet a full Java classloader + JVM-equivalent type system.
+- Interface/inheritance-heavy helper libraries are only partially supported.
+- Hardcoded shims for `Wettlauf.durchfuehren` and
+    `DrehHamster.getStandardHamsterAlsDrehHamster` were removed intentionally;
+    multi-file samples now rely on companion file loading and existing runtime
+    compatibility hooks.
+
+### Practical guidance for sample folders
+
+1. Prefer **Load Folder** for classic sample directories.
+2. Ensure the folder contains the entry `.ham`, companion `.ham`, and `.ter`.
+3. Use the **Loaded Sources** panel to verify that all expected files were
+     imported.
 
 ## Prerequisites
 
@@ -99,6 +147,46 @@ const state = JSON.parse(H.getState());
 // state.log[]   – latest log entries
 // state.terminal.needsInput, .prompt, .output[]
 ```
+
+## Hamster language terminal I/O (Phase 3)
+
+The in-browser hamster language runner now supports:
+
+- `readInt()` and `readInt("Prompt")`
+- `readString()` and `readString("Prompt")`
+- `readInt(id, "Prompt")` and `readString(id, "Prompt")` for named hamsters
+
+When a running program reaches one of these calls, execution pauses and the
+terminal overlay requests input. After submitting input, the same statement is
+retried and execution continues.
+
+Example program:
+
+```java
+void main() {
+    int steps = readInt("How many steps?");
+    String msg = readString("Type any note:");
+
+    while (steps > 0) {
+        if (vornFrei()) {
+            vor();
+        }
+        steps--;
+    }
+}
+```
+
+## Manual browser checklist (terminal flow)
+
+Use this quick checklist in `index.html`:
+
+1. Paste the sample program above and press Run.
+2. Confirm the terminal overlay appears with the first prompt.
+3. Enter a number and submit.
+4. Confirm the second prompt appears and accepts text.
+5. Confirm the hamster performs the requested number of loop iterations.
+6. Confirm no duplicate step is executed before input is submitted.
+7. Press Reset and rerun to verify the flow remains stable.
 
 ## Next steps
 
