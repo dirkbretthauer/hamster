@@ -1,17 +1,22 @@
-# Hamster Simulator – TeaVM Prototype
+# Hamster Simulator – Web Edition
 
-Proof-of-concept that compiles the Hamster Simulator's domain model to
-JavaScript via [TeaVM](https://teavm.org) so students can run Hamster programs
-in a plain web browser with no JVM required.
+Browser-based Hamster Simulator that compiles the domain model to JavaScript
+via [TeaVM](https://teavm.org), so students can run Hamster programs in a
+plain web browser with no JVM required.
 
-## What this proves
+## Original project references
+
+- Java Hamster Model website: <https://www.java-hamster-modell.de/index2.html>
+- Original simulator: <https://www.java-hamster-modell.de/simulator.html>
+
+## What this provides
 
 | Goal | Approach |
 |---|---|
 | Run simulation logic in the browser | TeaVM compiles `HamsterModel` (Java) → `hamster-engine.js` (JavaScript ES2015 module) |
 | Zero server required for students | The compiled JS + static HTML work from any web server or CDN |
 | Parity with desktop domain model | Clean re-implementation of `SimulationModel` + `Terrain` without Swing/Workbench |
-| Comparison baseline | `index-cheerpj.html` runs the **original unchanged JAR** via CheerpJ |
+| Alignment with original model | Browser runner stays compatible with classic hamster language samples |
 
 ## Project layout
 
@@ -41,7 +46,6 @@ teavm-prototype/
                 │   ├── hamster-runner.test.mjs   Node tests
                 │   ├── validate-band2.mjs        Batch parser validation script
                 │   └── package.json              Test script entrypoint
-        └── index-cheerpj.html            CheerpJ fallback (loads original JAR)
 ```
 
 ## Recent UX updates
@@ -110,9 +114,9 @@ mvn jetty:run
 
 Then open <http://localhost:8080/hamster/> in your browser.
 
-## Benchmark checklist (TeaVM vs CheerpJ)
+## Benchmark checklist
 
-Open DevTools (F12) in both pages and record:
+Open DevTools (F12) and record:
 
 - [ ] **Startup time** – from navigation to first interactive frame
 - [ ] **JS download size** – Network tab, filter by JS, sum transferred bytes
@@ -187,24 +191,6 @@ Use this quick checklist in `index.html`:
 5. Confirm the hamster performs the requested number of loop iterations.
 6. Confirm no duplicate step is executed before input is submitted.
 7. Press Reset and rerun to verify the flow remains stable.
-
-## License and attribution
-
-This project includes and adapts components from Hamster-Simulator.
-
-- License text is provided in `LICENSE.md`.
-- Upstream copyright notices and disclaimer text must be retained in source and
-    binary redistributions.
-- Use of Hamster-Simulator contributor/developer names for endorsement is not
-    permitted without prior written permission.
-- For derivative distributions, include a short change summary.
-
-Change summary for this derivative (high-level):
-
-- Browser-first TeaVM webapp integration and deployment packaging.
-- Hamster language lexer/parser/runner enhancements and tests.
-- Multi-file sample loading (`Load Folder`, companion `.ham` + `.ter`).
-- Legacy compatibility work for Band 2 sample corpus.
 
 ## Next steps
 

@@ -14,8 +14,15 @@
  * All engine calls go through the `engine` wrapper below so errors are
  * caught and displayed in the log panel without crashing the page.
  */
+// test sentinel line
 
 import * as E from './js/hamster-engine.js';   // TeaVM-compiled module
+import { ASTNodeType, parseProgram } from './lang/hamster-parser.js';
+import {
+    RunnerPause,
+    createRunnerState as createRunnerStateCore,
+    executeRunnerStep as executeRunnerStepCore,
+} from './lang/hamster-runner.js';
 
 // ╔═══════════════════════════════════════════════════════════╗
 // ║  Engine wrapper                                           ║
@@ -34,6 +41,7 @@ function createFallbackBackend() {
     let state = null;
     let snapshot = null;
     let nextId = 0;
+    let pendingInput = null;
 
     const DX = [0, 1, 0, -1];
     const DY = [-1, 0, 1, 0];
@@ -195,10 +203,49 @@ function createFallbackBackend() {
             state.terrain.hamsters.push({ id, x: col, y: row, dir, mouth, color });
             return id;
         },
+        setDefaultHamster(col, row, dir = null) {
+            if (!inside(col, row)) throw new Error('Position outside terrain bounds');
+            if (state.terrain.walls[row][col]) throw new Error('Cannot place hamster on a wall');
+            const h = getHamster(-1);
+            h.x = col;
+            h.y = row;
+            if (dir != null && !Number.isNaN(dir)) {
+                h.dir = ((dir % 4) + 4) % 4;
+            }
+            return clone(state);
+        },
+        rotateDefaultHamster(turns = 1) {
+            const h = getHamster(-1);
+            const delta = turns | 0;
+            h.dir = ((h.dir + delta) % 4 + 4) % 4;
+            return clone(state);
+        },
         provideInput(val) {
+            pendingInput = String(val);
             state.terminal.needsInput = false;
             state.terminal.prompt = '';
             state.terminal.output.push(String(val));
+        },
+        readInt(_hamsterId = -1, prompt = '') {
+            if (pendingInput != null) {
+                const v = pendingInput;
+                pendingInput = null;
+                const n = parseInt(v, 10);
+                return Number.isNaN(n) ? 0 : n;
+            }
+            state.terminal.needsInput = true;
+            state.terminal.prompt = String(prompt || 'Enter number:');
+            return 0;
+        },
+        readString(_hamsterId = -1, prompt = '') {
+            if (pendingInput != null) {
+                const v = pendingInput;
+                pendingInput = null;
+                return v;
+            }
+            state.terminal.needsInput = true;
+            state.terminal.prompt = String(prompt || 'Enter text:');
+            return '';
         },
         getState() {
             return clone(state);
@@ -216,6 +263,19 @@ function resolveBackend() {
 }
 
 const BACKEND = resolveBackend();
+
+function callAndParse(name, args = []) {
+    const fn = BACKEND.api?.[name];
+    if (typeof fn !== 'function') {
+        logError(`Engine backend does not support ${name}()`);
+        return BACKEND.api?.getState ? parseState(BACKEND.api.getState()) : null;
+    }
+    const result = fn.apply(BACKEND.api, args);
+    if (BACKEND.mode === 'teavm' && typeof BACKEND.api.getState === 'function') {
+        return parseState(BACKEND.api.getState());
+    }
+    return parseState(result);
+}
 
 export const engine = {
     // lifecycle
@@ -256,9 +316,13 @@ export const engine = {
     // hamster creation
     createHamster: (row, col, dir, mouth, color=1) =>
         BACKEND.api.createHamster(row, col, dir, mouth, color),
+    setDefaultHamster: (col, row, dir=null) => callAndParse('setDefaultHamster', [col, row, dir == null ? -1 : dir]),
+    rotateDefaultHamster: (turns=1) => callAndParse('rotateDefaultHamster', [turns]),
 
     // terminal
     provideInput: (val) => BACKEND.api.provideInput(val),
+    readInt: (hamsterId=-1, prompt='') => BACKEND.api.readInt(hamsterId, prompt),
+    readString: (hamsterId=-1, prompt='') => BACKEND.api.readString(hamsterId, prompt),
 
     // raw state
     getState: () => parseState(BACKEND.api.getState()),
@@ -274,8 +338,10 @@ function safely(fn) {
 // ╚═══════════════════════════════════════════════════════════╝
 
 const CELL   = 48;   // pixels per tile
+export const CELL_SIZE = CELL;
 const COLORS = ['#f5c518','#e74c3c','#2ecc71','#3498db','#9b59b6','#e67e22'];
 const DIRS   = ['↑','→','↓','←'];   // N E S W
+const DIR_TO_TER = ['^','>','v','<'];
 
 let canvas, ctx;
 
@@ -394,54 +460,52 @@ export function clearLog() {
     if (logEl) logEl.innerHTML = '';
 }
 
-/** Serialise the current terrain to classic .ter text format. */
-export function terrainToTer(state) {
-    const terrain = state?.terrain;
-    if (!terrain) throw new Error('No terrain state to export');
-    const defaultHamster = terrain.hamsters?.find(h => h.id === -1)
-        || terrain.hamsters?.[0]
-        || { x: 0, y: 0, dir: 1, mouth: 0 };
-
-    const lines = [];
-    const grainCells = [];
-
-    for (let row = 0; row < terrain.height; row++) {
-        let line = '';
-        for (let col = 0; col < terrain.width; col++) {
-            const isWall = !!terrain.walls?.[row]?.[col];
-            if (isWall) {
-                line += '#';
-                continue;
-            }
-
-            const isDefault = defaultHamster && defaultHamster.x === col && defaultHamster.y === row;
-            const cornCount = terrain.corn?.[row]?.[col] ?? 0;
-
-            if (isDefault) {
-                const dir = ((defaultHamster.dir % 4) + 4) % 4;
-                line += DIR_TO_TER[dir] || '>';
-                grainCells.push({ row, col });
-            } else if (cornCount > 0) {
-                line += '*';
-                grainCells.push({ row, col });
-            } else {
-                line += ' ';
-            }
-        }
-        lines.push(line);
-    }
-
-    const sections = [
-        String(terrain.width),
-        String(terrain.height),
-        ...lines,
-        ...grainCells.map(({ row, col }) => String(terrain.corn?.[row]?.[col] ?? 0)),
-        String(defaultHamster?.mouth ?? 0),
-    ];
-
-    return sections.join('\n');
-}
-
+/** Serialise the current terrain to classic .ter text format. */
+export function terrainToTer(state) {
+    const terrain = state?.terrain;
+    if (!terrain) throw new Error('No terrain state to export');
+    const defaultHamster = terrain.hamsters?.find(h => h.id === -1)
+        || terrain.hamsters?.[0]
+        || { x: 0, y: 0, dir: 1, mouth: 0 };
+
+    const lines = [];
+    const cornPositions = [];
+
+    for (let row = 0; row < terrain.height; row++) {
+        let line = '';
+        for (let col = 0; col < terrain.width; col++) {
+            const isWall = !!terrain.walls?.[row]?.[col];
+            if (isWall) {
+                line += '#';
+                continue;
+            }
+            const isDefault = defaultHamster && defaultHamster.x === col && defaultHamster.y === row;
+            const cornCount = terrain.corn?.[row]?.[col] ?? 0;
+            if (isDefault) {
+                const dir = ((defaultHamster.dir % 4) + 4) % 4;
+                line += DIR_TO_TER[dir] || '>';
+                cornPositions.push({ x: col, y: row });
+            } else if (cornCount > 0) {
+                line += '*';
+                cornPositions.push({ x: col, y: row });
+            } else {
+                line += ' ';
+            }
+        }
+        lines.push(line);
+    }
+
+    const sections = [
+        String(terrain.width),
+        String(terrain.height),
+        ...lines,
+        ...cornPositions.map(pos => String(terrain.corn?.[pos.y]?.[pos.x] ?? 0)),
+        String(defaultHamster?.mouth ?? 0),
+    ];
+
+    return sections.join('\n');
+}
+
 // ╔═══════════════════════════════════════════════════════════╗
 // ║  Program runner                                           ║
 // ╚═══════════════════════════════════════════════════════════╝
@@ -459,74 +523,237 @@ export function terrainToTer(state) {
  *   vor(); vor(); linksUm(); vor(); gib();
  */
 
-let stepQueue    = [];
 let runTimerId   = null;
 let onStepRender = null;
+let runnerState  = null;
+
+const staticCompatibilityShims = new Map([
+    ['Math.random', () => Math.random()],
+    ['Hamster.getStandardHamster', () => ({ __kind: 'hamster', id: -1, className: 'Hamster' })],
+    ['Hamster.getStandardHamsterAlsDrehHamster', () => ({ __kind: 'hamster', id: -1, className: 'Hamster' })],
+]);
+
+function invokeStaticCompatibilityShim(name, args) {
+    const direct = staticCompatibilityShims.get(name);
+    if (direct) {
+        return direct(args ?? []);
+    }
+    if (name.endsWith('.getStandardHamster') || name.endsWith('.getStandardHamsterAlsDrehHamster')) {
+        return { __kind: 'hamster', id: -1, className: name.split('.')[0] || 'Hamster' };
+    }
+    return undefined;
+}
 
 export function setStepCallback(fn) { onStepRender = fn; }
 
 export function hasPendingProgram() {
-    return runTimerId !== null || stepQueue.length > 0;
+    return runTimerId !== null || (runnerState !== null && !runnerState.finished);
 }
 
-/**
- * Compile a program text into an array of async thunks, one per statement.
- * For the prototype, statements are split on ';'—a full parser is out of scope.
- */
 export function compileProgram(text) {
-    // Expose engine API as named parameters available inside student scripts.
-    const API = {
-        vor:               (id=-1) => engine.vor(id),
-        linksUm:           (id=-1) => engine.linksUm(id),
-        nimm:              (id=-1) => engine.nimm(id),
-        gib:               (id=-1) => engine.gib(id),
-        vornFrei:          (id=-1) => engine.vornFrei(id),
-        kornDa:            (id=-1) => engine.kornDa(id),
-        maulLeer:          (id=-1) => engine.maulLeer(id),
-        getReihe:          (id=-1) => engine.getReihe(id),
-        getSpalte:         (id=-1) => engine.getSpalte(id),
-        getBlickrichtung:  (id=-1) => engine.getBlickrichtung(id),
-        getAnzahlKoerner:  (id=-1) => engine.getAnzahlKoerner(id),
-        createHamster:     (r,c,d,m,col=1) => engine.createHamster(r,c,d,m,col),
-    };
-
-    const paramNames  = Object.keys(API).join(',');
-    const paramValues = Object.values(API);
-
-    // Wrap the whole program as one function body so that while/for/if
-    // statements work correctly across "lines".  Each call to stepProgram()
-    // then executes the entire compiled function in one go and the engine's
-    // built-in per-command state changes drive the animation via the step
-    // callback.  For the prototype this is fine; a full debugger would need
-    // to yield after each statement via async/generator semantics.
-    stepQueue = [];
+    runnerState = null;
     try {
-        // eslint-disable-next-line no-new-func
-        const fn = new Function(paramNames, text);
-        stepQueue.push(() => {
-            try {
-                fn(...paramValues);
-                return engine.getState();
-            } catch(e) {
-                logError('Runtime error: ' + e.message);
-                return engine.getState();
-            }
+        const ast = parseProgram(text, { compatibility: true, requireMain: true });
+        runnerState = createRunnerStateCore(ast, {
+            resolveIdentifier(name) {
+                if (name === 'Hamster') {
+                    return { __kind: 'class', name: 'Hamster' };
+                }
+                // Legacy OO examples often reference class names directly
+                // (e.g. Wettlauf.durchfuehren(...)). Treat PascalCase symbols
+                // as class references so static shims can handle them.
+                if (/^[A-Z][A-Za-z0-9_]*$/.test(name)) {
+                    return { __kind: 'class', name };
+                }
+                return undefined;
+            },
+            createObject(className, args) {
+                if (className.endsWith('Hamster')) {
+                    if (args.length < 4) {
+                        throw new Error(className + ' constructor expects at least 4 arguments');
+                    }
+                    const id = engine.createHamster(
+                        Number(args[0]), Number(args[1]), Number(args[2]), Number(args[3]),
+                        args.length >= 5 ? Number(args[4]) : 1,
+                    );
+                    return { __kind: 'hamster', id, className };
+                }
+                return { __kind: 'object', className, fields: Object.create(null) };
+            },
+            getMember(receiver, property) {
+                if (receiver && receiver.__kind === 'class' && receiver.name === 'Hamster') {
+                    if (property === 'NORD') return 0;
+                    if (property === 'OST') return 1;
+                    if (property === 'SUED') return 2;
+                    if (property === 'WEST') return 3;
+                }
+                if (receiver && receiver.__kind === 'object') {
+                    return receiver.fields[property];
+                }
+                return undefined;
+            },
+            setMember(receiver, property, value) {
+                if (receiver && receiver.__kind === 'object') {
+                    receiver.fields[property] = value;
+                    return true;
+                }
+                return false;
+            },
+            callMethod(receiver, methodName, args) {
+                if (receiver && receiver.__kind === 'hamster') {
+                    const hamsterId = receiver.id;
+                    switch (methodName) {
+                        case 'vor': return engine.vor(hamsterId);
+                        case 'linksUm': return engine.linksUm(hamsterId);
+                        case 'rechtsUm': {
+                            engine.linksUm(hamsterId);
+                            engine.linksUm(hamsterId);
+                            return engine.linksUm(hamsterId);
+                        }
+                        case 'nimm': return engine.nimm(hamsterId);
+                        case 'gib': return engine.gib(hamsterId);
+                        case 'vornFrei': return engine.vornFrei(hamsterId);
+                        case 'kornDa': return engine.kornDa(hamsterId);
+                        case 'maulLeer': return engine.maulLeer(hamsterId);
+                        case 'getReihe': return engine.getReihe(hamsterId);
+                        case 'getSpalte': return engine.getSpalte(hamsterId);
+                        case 'getBlickrichtung': return engine.getBlickrichtung(hamsterId);
+                        case 'getAnzahlKoerner': return engine.getAnzahlKoerner(hamsterId);
+                        case 'liesZahl': {
+                            const prompt = args.length > 0 ? String(args[0]) : 'Enter number:';
+                            const value = engine.readInt(hamsterId, prompt);
+                            if (engine.getState()?.terminal?.needsInput) {
+                                throw new RunnerPause('Waiting for terminal input');
+                            }
+                            return value;
+                        }
+                        case 'liesZeichenkette':
+                        case 'liesString': {
+                            const prompt = args.length > 0 ? String(args[0]) : 'Enter text:';
+                            const value = engine.readString(hamsterId, prompt);
+                            if (engine.getState()?.terminal?.needsInput) {
+                                throw new RunnerPause('Waiting for terminal input');
+                            }
+                            return value;
+                        }
+                        case 'schreib':
+                            appendLog([String(args.length > 0 ? args[0] : '')]);
+                            return undefined;
+                        default:
+                            break;
+                    }
+                }
+
+                if (receiver && receiver.__kind === 'class') {
+                    return this.callBuiltin(receiver.name + '.' + methodName, args);
+                }
+
+                if (typeof receiver === 'string') {
+                    if (methodName === 'equals') {
+                        return receiver === String(args?.[0] ?? '');
+                    }
+                    if (methodName === 'equalsIgnoreCase') {
+                        return receiver.toLowerCase() === String(args?.[0] ?? '').toLowerCase();
+                    }
+                    if (methodName === 'length') {
+                        return receiver.length;
+                    }
+                }
+
+                throw new Error('Unsupported method call: ' + methodName);
+            },
+            callBuiltin(name, args, functions) {
+                const shimmed = invokeStaticCompatibilityShim(name, args);
+                if (shimmed !== undefined) {
+                    return shimmed;
+                }
+                switch (name) {
+                    case 'vor': return engine.vor(defaultHamsterId(args));
+                    case 'linksUm': return engine.linksUm(defaultHamsterId(args));
+                    case 'nimm': return engine.nimm(defaultHamsterId(args));
+                    case 'gib': return engine.gib(defaultHamsterId(args));
+                    case 'vornFrei': return engine.vornFrei(defaultHamsterId(args));
+                    case 'kornDa': return engine.kornDa(defaultHamsterId(args));
+                    case 'maulLeer': return engine.maulLeer(defaultHamsterId(args));
+                    case 'getReihe': return engine.getReihe(defaultHamsterId(args));
+                    case 'getSpalte': return engine.getSpalte(defaultHamsterId(args));
+                    case 'getBlickrichtung': return engine.getBlickrichtung(defaultHamsterId(args));
+                    case 'getAnzahlKoerner': return engine.getAnzahlKoerner(defaultHamsterId(args));
+                    case 'createHamster':
+                        if (args.length < 4) {
+                            throw new Error('createHamster expects at least 4 arguments');
+                        }
+                        return engine.createHamster(
+                            Number(args[0]), Number(args[1]), Number(args[2]), Number(args[3]),
+                            args.length >= 5 ? Number(args[4]) : 1,
+                        );
+                    case 'readInt': {
+                        const { hamsterId, prompt } = parseTerminalArgs(args, 'Enter number:');
+                        const value = engine.readInt(hamsterId, prompt);
+                        if (engine.getState()?.terminal?.needsInput) {
+                            throw new RunnerPause('Waiting for terminal input');
+                        }
+                        return value;
+                    }
+                    case 'readString': {
+                        const { hamsterId, prompt } = parseTerminalArgs(args, 'Enter text:');
+                        const value = engine.readString(hamsterId, prompt);
+                        if (engine.getState()?.terminal?.needsInput) {
+                            throw new RunnerPause('Waiting for terminal input');
+                        }
+                        return value;
+                    }
+                    default:
+                        throw new Error('Unknown function: ' + name);
+                }
+            },
         });
     } catch(e) {
         logError('Compile error: ' + e.message);
+        return 0;
     }
 
-    return stepQueue.length;
+    return runnerState && !runnerState.finished ? 1 : 0;
 }
 
 /** Execute the next statement in the program queue; returns false when done. */
 export function stepProgram() {
-    if (stepQueue.length === 0) return false;
-    const thunk = stepQueue.shift();
-    const state = thunk();
-    if (state && onStepRender) onStepRender(state);
-    else if (onStepRender) onStepRender(engine.getState());
-    return stepQueue.length > 0;
+    if (!runnerState || runnerState.finished) return false;
+    try {
+        const progressed = executeRunnerStepCore(runnerState);
+        const state = engine.getState();
+        if (onStepRender) onStepRender(state);
+        if (!progressed) {
+            runnerState.finished = true;
+            return false;
+        }
+        return !runnerState.finished;
+    } catch (e) {
+        if (e instanceof RunnerPause) {
+            if (onStepRender) onStepRender(engine.getState());
+            return true;
+        }
+        logError('Runtime error: ' + (e.message ?? String(e)));
+        runnerState.finished = true;
+        if (onStepRender) onStepRender(engine.getState());
+        return false;
+    }
+}
+
+function parseTerminalArgs(args, defaultPrompt) {
+    if (!args || args.length === 0) {
+        return { hamsterId: -1, prompt: defaultPrompt };
+    }
+    if (args.length === 1) {
+        if (typeof args[0] === 'number') {
+            return { hamsterId: Number(args[0]), prompt: defaultPrompt };
+        }
+        return { hamsterId: -1, prompt: String(args[0]) };
+    }
+    return {
+        hamsterId: Number(args[0]),
+        prompt: String(args[1]),
+    };
 }
 
 /** Run the whole program with a delay (ms) between steps. */
@@ -546,5 +773,253 @@ export function runProgram(delayMs = 400) {
 /** Interrupt a running program. */
 export function stopProgram() {
     if (runTimerId !== null) { clearTimeout(runTimerId); runTimerId = null; }
-    stepQueue = [];
+    runnerState = null;
+}
+
+function createRunnerState(ast) {
+    const functions = new Map();
+    for (const fn of ast.functions || []) {
+        functions.set(fn.name, fn);
+    }
+    const main = functions.get('main');
+    if (!main) {
+        throw new Error('Program must define void main()');
+    }
+
+    return {
+        ast,
+        functions,
+        finished: false,
+        scopes: [new Map()],
+        stack: [{ kind: 'stmt', node: main.body }],
+    };
+}
+
+function executeRunnerStep(state) {
+    while (state.stack.length > 0) {
+        const frame = state.stack.pop();
+
+        if (frame.kind === 'enterScope') {
+            state.scopes.push(new Map());
+            continue;
+        }
+        if (frame.kind === 'exitScope') {
+            if (state.scopes.length > 1) {
+                state.scopes.pop();
+            }
+            continue;
+        }
+        if (frame.kind !== 'stmt') {
+            continue;
+        }
+
+        const node = frame.node;
+        if (!node) continue;
+
+        switch (node.type) {
+            case ASTNodeType.Block:
+                state.stack.push({ kind: 'exitScope' });
+                for (let i = node.statements.length - 1; i >= 0; i--) {
+                    state.stack.push({ kind: 'stmt', node: node.statements[i] });
+                }
+                state.stack.push({ kind: 'enterScope' });
+                continue;
+
+            case ASTNodeType.IfStatement: {
+                const cond = truthy(evalExpression(node.test, state));
+                if (cond) {
+                    state.stack.push({ kind: 'stmt', node: node.consequent });
+                } else if (node.alternate) {
+                    state.stack.push({ kind: 'stmt', node: node.alternate });
+                }
+                return true;
+            }
+
+            case ASTNodeType.WhileStatement: {
+                const cond = truthy(evalExpression(node.test, state));
+                if (cond) {
+                    state.stack.push({ kind: 'stmt', node });
+                    state.stack.push({ kind: 'stmt', node: node.body });
+                }
+                return true;
+            }
+
+            case ASTNodeType.VariableDecl: {
+                let value = defaultValueForType(node.varType);
+                if (node.initializer) {
+                    value = evalExpression(node.initializer, state);
+                }
+                declareVariable(state, node.name, value);
+                return true;
+            }
+
+            case ASTNodeType.Assignment: {
+                const value = evalExpression(node.value, state);
+                assignVariable(state, node.name, value);
+                return true;
+            }
+
+            case ASTNodeType.ExpressionStmt:
+                evalExpression(node.expression, state);
+                return true;
+
+            case ASTNodeType.ReturnStatement:
+                state.finished = true;
+                state.stack.length = 0;
+                return true;
+
+            default:
+                throw new Error('Unsupported statement type: ' + node.type);
+        }
+    }
+
+    state.finished = true;
+    return false;
+}
+
+function evalExpression(node, state) {
+    switch (node.type) {
+        case ASTNodeType.Literal:
+            return node.value;
+
+        case ASTNodeType.Identifier:
+            return getVariable(state, node.name);
+
+        case ASTNodeType.UnaryExpression: {
+            const value = evalExpression(node.argument, state);
+            if (node.operator === '!') return !truthy(value);
+            if (node.operator === '-') return -Number(value);
+            throw new Error('Unsupported unary operator: ' + node.operator);
+        }
+
+        case ASTNodeType.PostfixExpression: {
+            if (node.operator !== '--' || node.argument.type !== ASTNodeType.Identifier) {
+                throw new Error('Only identifier-- is supported');
+            }
+            const current = Number(getVariable(state, node.argument.name));
+            assignVariable(state, node.argument.name, current - 1);
+            return current;
+        }
+
+        case ASTNodeType.BinaryExpression:
+            return evalBinaryExpression(node, state);
+
+        case ASTNodeType.CallExpression:
+            return evalCallExpression(node, state);
+
+        default:
+            throw new Error('Unsupported expression type: ' + node.type);
+    }
+}
+
+function evalBinaryExpression(node, state) {
+    const op = node.operator;
+    if (op === '&&') {
+        const left = truthy(evalExpression(node.left, state));
+        if (!left) return false;
+        return truthy(evalExpression(node.right, state));
+    }
+    if (op === '||') {
+        const left = truthy(evalExpression(node.left, state));
+        if (left) return true;
+        return truthy(evalExpression(node.right, state));
+    }
+
+    const left = evalExpression(node.left, state);
+    const right = evalExpression(node.right, state);
+
+    switch (op) {
+        case '+': return Number(left) + Number(right);
+        case '-': return Number(left) - Number(right);
+        case '*': return Number(left) * Number(right);
+        case '/': return Math.trunc(Number(left) / Number(right));
+        case '%': return Number(left) % Number(right);
+        case '==': return left === right;
+        case '!=': return left !== right;
+        case '<': return Number(left) < Number(right);
+        case '<=': return Number(left) <= Number(right);
+        case '>': return Number(left) > Number(right);
+        case '>=': return Number(left) >= Number(right);
+        default:
+            throw new Error('Unsupported binary operator: ' + op);
+    }
+}
+
+function evalCallExpression(node, state) {
+    const args = node.arguments.map(arg => evalExpression(arg, state));
+    const name = node.callee;
+
+    switch (name) {
+        case 'vor': return engine.vor(defaultHamsterId(args));
+        case 'linksUm': return engine.linksUm(defaultHamsterId(args));
+        case 'nimm': return engine.nimm(defaultHamsterId(args));
+        case 'gib': return engine.gib(defaultHamsterId(args));
+        case 'vornFrei': return engine.vornFrei(defaultHamsterId(args));
+        case 'kornDa': return engine.kornDa(defaultHamsterId(args));
+        case 'maulLeer': return engine.maulLeer(defaultHamsterId(args));
+        case 'getReihe': return engine.getReihe(defaultHamsterId(args));
+        case 'getSpalte': return engine.getSpalte(defaultHamsterId(args));
+        case 'getBlickrichtung': return engine.getBlickrichtung(defaultHamsterId(args));
+        case 'getAnzahlKoerner': return engine.getAnzahlKoerner(defaultHamsterId(args));
+        case 'createHamster':
+            if (args.length < 4) {
+                throw new Error('createHamster expects at least 4 arguments');
+            }
+            return engine.createHamster(
+                Number(args[0]), Number(args[1]), Number(args[2]), Number(args[3]),
+                args.length >= 5 ? Number(args[4]) : 1,
+            );
+        default:
+            if (state.functions.has(name)) {
+                throw new Error('User-defined function calls are not supported yet: ' + name);
+            }
+            throw new Error('Unknown function: ' + name);
+    }
+}
+
+function defaultHamsterId(args) {
+    if (!args || args.length === 0) return -1;
+    const first = args[0];
+    if (first && typeof first === 'object' && first.__kind === 'hamster') {
+        return Number(first.id);
+    }
+    return Number(first);
+}
+
+function truthy(value) {
+    return !!value;
+}
+
+function defaultValueForType(typeName) {
+    if (typeName === 'boolean') return false;
+    return 0;
+}
+
+function declareVariable(state, name, value) {
+    const scope = state.scopes[state.scopes.length - 1];
+    if (scope.has(name)) {
+        throw new Error('Variable already declared: ' + name);
+    }
+    scope.set(name, value);
+}
+
+function assignVariable(state, name, value) {
+    for (let i = state.scopes.length - 1; i >= 0; i--) {
+        const scope = state.scopes[i];
+        if (scope.has(name)) {
+            scope.set(name, value);
+            return;
+        }
+    }
+    throw new Error('Unknown variable: ' + name);
+}
+
+function getVariable(state, name) {
+    for (let i = state.scopes.length - 1; i >= 0; i--) {
+        const scope = state.scopes[i];
+        if (scope.has(name)) {
+            return scope.get(name);
+        }
+    }
+    throw new Error('Unknown variable: ' + name);
 }

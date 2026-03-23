@@ -99,6 +99,37 @@
       border-top: 1px solid #313244;
       flex-wrap: wrap;
     }
+    #sources-panel {
+      border-top: 1px solid #313244;
+      background: #151522;
+      padding: .5rem .8rem;
+      font-size: .78rem;
+      max-height: 180px;
+      overflow: auto;
+    }
+    #sources-folder {
+      color: #89b4fa;
+      margin-bottom: .35rem;
+      word-break: break-word;
+    }
+    #sources-list {
+      list-style: none;
+      display: grid;
+      gap: .2rem;
+    }
+    #sources-list li {
+      font-family: 'Consolas', 'Fira Code', monospace;
+      color: #cdd6f4;
+      border-left: 2px solid #45475a;
+      padding-left: .4rem;
+      word-break: break-word;
+    }
+    #sources-list li.file-ham { border-left-color: #a6e3a1; }
+    #sources-list li.file-ter { border-left-color: #f9e2af; }
+    #sources-empty {
+      color: #6c7086;
+      font-style: italic;
+    }
 
     /* ── log ─────────────────────────────────────────────── */
     #log-wrapper {
@@ -227,7 +258,7 @@
 </div>
 
 <input id="terrain-file-input" type="file" accept=".ter,text/plain" style="display:none" />
-<input id="program-file-input" type="file" accept=".ham,.txt,text/plain" style="display:none" />
+<input id="program-file-input" type="file" accept=".ham,.ter,.txt,text/plain" multiple style="display:none" />
 
 <main>
   <section id="sim-wrapper">
@@ -238,28 +269,34 @@
     <div class="panel-title">
       📝 Program
       <span style="font-size:.72rem;color:#6c7086;margin-left:auto">
-        Available: vor() linksUm() nimm() gib() vornFrei() kornDa() maulLeer()
+        Available: vor() linksUm() nimm() gib() vornFrei() kornDa() maulLeer() readInt() readString()
       </span>
     </div>
-    <textarea id="editor" spellcheck="false">// Example: collect all grains in row 0, then return
-// Uses while-loops and predicates
-
-while (vornFrei()) {
-  if (kornDa()) {
-    nimm();
+    <textarea id="editor" spellcheck="false">// Example hamster program in classic .ham syntax
+void main() {
+  while (vornFrei()) {
+    if (kornDa()) {
+      nimm();
+    }
+    vor();
   }
-  vor();
-}
-// Turn around
-linksUm();
-linksUm();</textarea>
+  linksUm();
+  linksUm();
+}</textarea>
     <div id="editor-controls">
       <button id="btn-run"  class="primary success">▶ Run</button>
       <button id="btn-step" class="primary">⏭ Step</button>
       <button id="btn-stop" class="danger" disabled>⏹ Stop</button>
       <button id="btn-reset">↺ Reset</button>
       <button id="btn-import-program">Load .ham</button>
+      <button id="btn-load-folder">Load Folder</button>
       <button id="btn-export-program">Save .ham</button>
+      <button id="btn-save-plus">Save+ (.ham + .ter)</button>
+    </div>
+    <div id="sources-panel" aria-live="polite">
+      <div id="sources-folder">Folder: none</div>
+      <ul id="sources-list"></ul>
+      <div id="sources-empty">No source files loaded yet.</div>
     </div>
   </section>
 
@@ -286,8 +323,6 @@ linksUm();</textarea>
  * During development without a build, replace the import path with your
  * TeaVM output file.  After `mvn package` the engine lands in:
  *   target/<artifact>/js/hamster-engine.js
- *
- * For local file testing (no server), use the CheerpJ alternative page instead.
  */
 import {
   engine,
@@ -317,7 +352,9 @@ const btnStep      = document.getElementById('btn-step');
 const btnStop      = document.getElementById('btn-stop');
 const btnReset     = document.getElementById('btn-reset');
 const btnImportProgram = document.getElementById('btn-import-program');
+const btnLoadFolder = document.getElementById('btn-load-folder');
 const btnExportProgram = document.getElementById('btn-export-program');
+const btnSavePlus  = document.getElementById('btn-save-plus');
 const speedRange   = document.getElementById('speed-range');
 const terW         = document.getElementById('ter-w');
 const terH         = document.getElementById('ter-h');
@@ -326,12 +363,20 @@ const cornInput    = document.getElementById('corn-amount');
 const hoverInfo    = document.getElementById('hover-info');
 const terrainFileInput = document.getElementById('terrain-file-input');
 const programFileInput = document.getElementById('program-file-input');
+const sourcesFolderEl = document.getElementById('sources-folder');
+const sourcesListEl = document.getElementById('sources-list');
+const sourcesEmptyEl = document.getElementById('sources-empty');
 
 let currentState   = null;
 let currentTool    = 'wall';
 let isDragging     = false;
 let lastPaintCell  = null;
 let currentProgramFilename = 'program.ham';
+let loadedProgramFolder = '';
+let loadedProgramFiles = [];
+let resetProgramText = '';
+let activeTerminalPrompt = null;
+let renderedLogCount = 0;
 
 // ─── init canvas / log ───────────────────────────────────────
 initCanvas(canvas);
@@ -346,23 +391,42 @@ const draw = state => {
 // ─── step callback: rerender after every engine step ─────────
 setStepCallback(state => {
   draw(state);
-    appendLog(state.log.slice(-5));   // show last 5 log entries
-    checkTerminal(state);
-    setStatus(state.state === 2 ? 'Finished' : 'Running');
+  const entries = Array.isArray(state?.log) ? state.log : [];
+  if (entries.length < renderedLogCount) {
+    renderedLogCount = 0;
+  }
+  const newEntries = entries.slice(renderedLogCount);
+  if (newEntries.length > 0) {
+    appendLog(newEntries);
+    renderedLogCount = entries.length;
+  }
+  checkTerminal(state);
+  setStatus(state.state === 2 ? 'Finished' : 'Running');
 });
 
 // ─── terminal overlay ────────────────────────────────────────
 function checkTerminal(state) {
-    if (state?.terminal?.needsInput) {
-        termPrompt.textContent = state.terminal.prompt || 'Input required:';
-        termInput.value = '';
-        overlay.classList.add('visible');
-        termInput.focus();
-    }
+  if (!state?.terminal?.needsInput) {
+    activeTerminalPrompt = null;
+    overlay.classList.remove('visible');
+    return;
+  }
+
+  const prompt = state.terminal.prompt || 'Input required:';
+  const isNewPrompt = prompt !== activeTerminalPrompt;
+
+  if (isNewPrompt || !overlay.classList.contains('visible')) {
+    termPrompt.textContent = prompt;
+    termInput.value = '';
+    activeTerminalPrompt = prompt;
+    overlay.classList.add('visible');
+    termInput.focus();
+  }
 }
 
 termSubmit.addEventListener('click', () => {
     engine.provideInput(termInput.value);
+  activeTerminalPrompt = null;
     overlay.classList.remove('visible');
 });
 termInput.addEventListener('keydown', e => {
@@ -378,6 +442,7 @@ try {
     draw(initState);
     loadingMsg.style.display = 'none';
     setStatus('Ready');
+    resetProgramText = editor.value ?? '';
 } catch(e) {
     loadingMsg.textContent = 'Engine failed to load – see console';
     console.error(e);
@@ -390,7 +455,7 @@ btnNew.addEventListener('click', () => {
     if (isNaN(w) || isNaN(h) || w < 1 || h < 1) return;
     const state = engine.init(w, h);
     draw(state);
-    clearLog();
+    clearExecutionLog();
     setStatus('New terrain ' + w + '×' + h);
 });
 
@@ -413,7 +478,7 @@ btnSample.addEventListener('click', () => {
 
     const state = engine.loadTerrain(ter);
   draw(state);
-    clearLog();
+    clearExecutionLog();
     setStatus('Sample terrain loaded');
 });
 
@@ -428,7 +493,7 @@ btnSample.addEventListener('click', () => {
       const text = await file.text();
       const state = engine.loadTerrain(text);
       draw(state);
-      clearLog();
+      clearExecutionLog();
       setStatus(`Loaded ${file.name}`);
     } catch (err) {
       console.error(err);
@@ -438,7 +503,7 @@ btnSample.addEventListener('click', () => {
     }
   });
 
-  btnExport?.addEventListener('click', () => {
+  btnExport?.addEventListener('click', async () => {
     if (!currentState?.terrain) {
       setStatus('Nothing to export');
       return;
@@ -448,17 +513,15 @@ btnSample.addEventListener('click', () => {
       const w = currentState.terrain.width;
       const h = currentState.terrain.height;
       const filename = `terrain-${w}x${h}.ter`;
-      const blob = new Blob([terText], { type: 'text/plain' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = filename;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-      setStatus('Terrain downloaded');
+      const result = await saveTextFile(filename, terText, '.ter');
+      if (result.saved) {
+        setStatus(`Terrain saved: ${result.filename}`);
+      }
     } catch (err) {
+      if (err?.name === 'AbortError') {
+        setStatus('Save cancelled');
+        return;
+      }
       console.error(err);
       setStatus(err.message || 'Export failed');
     }
@@ -467,14 +530,30 @@ btnSample.addEventListener('click', () => {
 // ─── program file workflow ─────────────────────────────────────────
 btnImportProgram?.addEventListener('click', () => programFileInput?.click());
 
+btnLoadFolder?.addEventListener('click', async () => {
+  if (typeof window.showDirectoryPicker !== 'function') {
+    setStatus('Load Folder not supported in this browser. Use Load .ham and select all files.');
+    return;
+  }
+  try {
+    const dirHandle = await window.showDirectoryPicker({ mode: 'read' });
+    await loadProgramFromDirectory(dirHandle);
+  } catch (err) {
+    if (err?.name === 'AbortError') {
+      setStatus('Folder selection cancelled');
+      return;
+    }
+    console.error(err);
+    setStatus(err.message || 'Could not load folder');
+  }
+});
+
 programFileInput?.addEventListener('change', async event => {
   const input = event.target;
-  const file = input.files?.[0];
-  if (!file) return;
+  const files = Array.from(input.files || []);
+  if (files.length === 0) return;
   try {
-    editor.value = await file.text();
-    currentProgramFilename = ensureHamExtension(file.name || currentProgramFilename);
-    setStatus(`Program loaded: ${currentProgramFilename}`);
+    await loadProgramFromFiles(files);
   } catch (err) {
     console.error(err);
     setStatus(err.message || 'Could not load program file');
@@ -483,28 +562,57 @@ programFileInput?.addEventListener('change', async event => {
   }
 });
 
-btnExportProgram?.addEventListener('click', () => {
+btnExportProgram?.addEventListener('click', async () => {
   const suggested = ensureHamExtension(currentProgramFilename || 'program.ham');
-  const entered = window.prompt('Program filename', suggested);
-  if (entered == null) return;
-  const filename = ensureHamExtension(entered.trim() || suggested);
-  currentProgramFilename = filename;
-  const blob = new Blob([editor.value ?? ''], { type: 'text/plain;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = filename;
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  URL.revokeObjectURL(url);
-  setStatus(`Program saved: ${filename}`);
+  try {
+    const result = await saveTextFile(suggested, editor.value ?? '', '.ham');
+    if (!result.saved) return;
+    currentProgramFilename = ensureHamExtension(result.filename || suggested);
+    setStatus(`Program saved: ${currentProgramFilename}`);
+  } catch (err) {
+    if (err?.name === 'AbortError') {
+      setStatus('Save cancelled');
+      return;
+    }
+    console.error(err);
+    setStatus(err.message || 'Save failed');
+  }
+});
+
+btnSavePlus?.addEventListener('click', async () => {
+  if (!currentState?.terrain) {
+    setStatus('No terrain to save');
+    return;
+  }
+  const defaultBase = getBasenameWithoutExtension(currentProgramFilename || 'program') || 'program';
+  const base = defaultBase;
+  const hamName = ensureHamExtension(base);
+  const terName = ensureTerExtension(base);
+
+  try {
+    const hamResult = await saveTextFile(hamName, editor.value ?? '', '.ham');
+    if (!hamResult.saved) return;
+    const savedHamName = ensureHamExtension(hamResult.filename || hamName);
+    const terFromHamName = ensureTerExtension(getBasenameWithoutExtension(savedHamName));
+    const terResult = await saveTextFile(terFromHamName, terrainToTer(currentState), '.ter');
+    if (!terResult.saved) return;
+    currentProgramFilename = savedHamName;
+    setStatus(`Saved ${savedHamName} + ${terResult.filename}`);
+  } catch (err) {
+    if (err?.name === 'AbortError') {
+      setStatus('Save cancelled');
+      return;
+    }
+    console.error(err);
+    setStatus(err.message || 'Save+ failed');
+  }
 });
 
 // ─── program controls ─────────────────────────────────────────
 btnRun.addEventListener('click', () => {
-    clearLog();
+  clearExecutionLog();
     engine.start();
+  resetProgramText = editor.value ?? '';
 
     // Compile the editor content
     const n = compileProgram(editor.value);
@@ -533,8 +641,9 @@ btnStep.addEventListener('click', () => {
     // First click: compile the script and snapshot the terrain
   if (!hasPendingProgram()) {
         engine.start();
+        resetProgramText = editor.value ?? '';
         compileProgram(editor.value);
-        clearLog();
+        clearExecutionLog();
     }
     const hasMore = stepProgram();
     if (!hasMore) {
@@ -558,8 +667,13 @@ btnStop.addEventListener('click', () => {
 btnReset.addEventListener('click', () => {
     stopProgram();
     const state = engine.reset();
+    if (typeof resetProgramText === 'string' && resetProgramText.length > 0) {
+      editor.value = resetProgramText;
+    }
+    overlay.classList.remove('visible');
+    termInput.value = '';
   draw(state);
-    clearLog();
+    clearExecutionLog();
     btnRun.disabled  = false;
     btnStep.disabled = false;
     btnStop.disabled = true;
@@ -608,9 +722,144 @@ function setStatus(msg) {
     statusEl.textContent = msg;
 }
 
+function clearExecutionLog() {
+  clearLog();
+  renderedLogCount = 0;
+}
+
+function updateLoadedSourcesPanel() {
+  if (sourcesFolderEl) {
+    sourcesFolderEl.textContent = `Folder: ${loadedProgramFolder || 'none'}`;
+  }
+  if (!sourcesListEl || !sourcesEmptyEl) return;
+
+  sourcesListEl.innerHTML = '';
+  const files = Array.isArray(loadedProgramFiles) ? loadedProgramFiles : [];
+  for (const fileName of files) {
+    const li = document.createElement('li');
+    li.textContent = fileName;
+    if (/\.ham$/i.test(fileName)) li.classList.add('file-ham');
+    if (/\.ter$/i.test(fileName)) li.classList.add('file-ter');
+    sourcesListEl.appendChild(li);
+  }
+  sourcesEmptyEl.style.display = files.length === 0 ? 'block' : 'none';
+}
+
 function ensureHamExtension(name) {
   const base = String(name || '').trim() || 'program';
   return /\.ham$/i.test(base) ? base : `${base}.ham`;
+}
+
+function ensureTerExtension(name) {
+  const base = String(name || '').trim() || 'terrain';
+  return /\.ter$/i.test(base) ? base : `${base}.ter`;
+}
+
+function getBasenameWithoutExtension(name) {
+  const value = String(name || '').trim();
+  return value.replace(/\.[^.]+$/u, '');
+}
+
+async function loadProgramFromDirectory(dirHandle) {
+  const files = [];
+  for await (const [, entry] of dirHandle.entries()) {
+    if (entry.kind !== 'file') continue;
+    const lowerName = String(entry.name || '').toLowerCase();
+    if (!lowerName.endsWith('.ham') && !lowerName.endsWith('.ter')) continue;
+    const file = await entry.getFile();
+    files.push(file);
+  }
+  await loadProgramFromFiles(files, { fromFolder: true, folderName: dirHandle.name || 'folder' });
+}
+
+async function loadProgramFromFiles(files, options = {}) {
+  const fileList = Array.from(files || []);
+  const hamFiles = fileList.filter(file => /\.ham$/i.test(file.name));
+  if (hamFiles.length === 0) {
+    throw new Error('No .ham files found');
+  }
+
+  // Prefer the traditional entrypoint name when available.
+  const entryHam = hamFiles.find(file => /(^|[\\/])hamsterprogramm\.ham$/i.test(file.name)) || hamFiles[0];
+  const companionHams = hamFiles.filter(file => file !== entryHam);
+
+  const entryText = await entryHam.text();
+  const companionTexts = await Promise.all(companionHams.map(async file => {
+    const text = await file.text();
+    return `\n/* companion file: ${file.name} */\n${text}`;
+  }));
+
+  editor.value = `${entryText}${companionTexts.join('')}`;
+  resetProgramText = editor.value ?? '';
+  currentProgramFilename = ensureHamExtension(entryHam.name || currentProgramFilename);
+
+  const loadedNames = [entryHam.name, ...companionHams.map(file => file.name)];
+  loadedProgramFolder = options.fromFolder ? (options.folderName || '') : '';
+  loadedProgramFiles = [...loadedNames];
+
+  const baseName = getBasenameWithoutExtension(currentProgramFilename);
+  let companionTer = fileList.find(file => /\.ter$/i.test(file.name) && getBasenameWithoutExtension(file.name) === baseName);
+  if (!companionTer) {
+    companionTer = fileList.find(file => /\.ter$/i.test(file.name));
+  }
+
+  if (companionTer) {
+    const terrainText = await companionTer.text();
+    const state = engine.loadTerrain(terrainText);
+    draw(state);
+    clearExecutionLog();
+    loadedProgramFiles.push(companionTer.name);
+    updateLoadedSourcesPanel();
+    setStatus(`Loaded ${currentProgramFilename} + ${companionHams.length} companion .ham + ${companionTer.name}`);
+    return;
+  }
+
+  updateLoadedSourcesPanel();
+
+  if (hamFiles.length === 1 && !options.fromFolder) {
+    setStatus(`Program loaded: ${currentProgramFilename}. Select multiple .ham files from the same folder to include dependencies.`);
+    return;
+  }
+
+  if (options.fromFolder) {
+    setStatus(`Loaded folder ${options.folderName}: ${currentProgramFilename} + ${companionHams.length} companion .ham (no .ter file found)`);
+    return;
+  }
+
+  setStatus(`Program loaded: ${currentProgramFilename} + ${companionHams.length} companion .ham (no companion .ter selected)`);
+}
+
+updateLoadedSourcesPanel();
+
+function downloadTextFile(filename, text) {
+  const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
+async function saveTextFile(suggestedName, text, extension) {
+  const cleanName = String(suggestedName || 'file.txt').trim() || 'file.txt';
+  if (typeof window.showSaveFilePicker === 'function') {
+    const handle = await window.showSaveFilePicker({
+      suggestedName: cleanName,
+      types: [{
+        description: 'Hamster file',
+        accept: { 'text/plain': [extension] },
+      }],
+    });
+    const writable = await handle.createWritable();
+    await writable.write(text);
+    await writable.close();
+    return { saved: true, filename: handle.name || cleanName, nativeDialog: true };
+  }
+  downloadTextFile(cleanName, text);
+  return { saved: true, filename: cleanName, nativeDialog: false };
 }
 
 function eventToCell(evt) {
