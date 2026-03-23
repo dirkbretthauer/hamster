@@ -377,6 +377,7 @@ let currentProgramFilename = 'program.ham';
 let loadedProgramFolder = '';
 let loadedProgramFiles = [];
 let resetProgramText = '';
+let activeTerminalPrompt = null;
 
 // ─── init canvas / log ───────────────────────────────────────
 initCanvas(canvas);
@@ -398,16 +399,27 @@ setStepCallback(state => {
 
 // ─── terminal overlay ────────────────────────────────────────
 function checkTerminal(state) {
-    if (state?.terminal?.needsInput) {
-        termPrompt.textContent = state.terminal.prompt || 'Input required:';
-        termInput.value = '';
-        overlay.classList.add('visible');
-        termInput.focus();
-    }
+  if (!state?.terminal?.needsInput) {
+    activeTerminalPrompt = null;
+    overlay.classList.remove('visible');
+    return;
+  }
+
+  const prompt = state.terminal.prompt || 'Input required:';
+  const isNewPrompt = prompt !== activeTerminalPrompt;
+
+  if (isNewPrompt || !overlay.classList.contains('visible')) {
+    termPrompt.textContent = prompt;
+    termInput.value = '';
+    activeTerminalPrompt = prompt;
+    overlay.classList.add('visible');
+    termInput.focus();
+  }
 }
 
 termSubmit.addEventListener('click', () => {
     engine.provideInput(termInput.value);
+  activeTerminalPrompt = null;
     overlay.classList.remove('visible');
 });
 termInput.addEventListener('keydown', e => {
