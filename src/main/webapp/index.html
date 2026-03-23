@@ -378,6 +378,7 @@ let loadedProgramFolder = '';
 let loadedProgramFiles = [];
 let resetProgramText = '';
 let activeTerminalPrompt = null;
+let renderedLogCount = 0;
 
 // ─── init canvas / log ───────────────────────────────────────
 initCanvas(canvas);
@@ -392,9 +393,17 @@ const draw = state => {
 // ─── step callback: rerender after every engine step ─────────
 setStepCallback(state => {
   draw(state);
-    appendLog(state.log.slice(-5));   // show last 5 log entries
-    checkTerminal(state);
-    setStatus(state.state === 2 ? 'Finished' : 'Running');
+  const entries = Array.isArray(state?.log) ? state.log : [];
+  if (entries.length < renderedLogCount) {
+    renderedLogCount = 0;
+  }
+  const newEntries = entries.slice(renderedLogCount);
+  if (newEntries.length > 0) {
+    appendLog(newEntries);
+    renderedLogCount = entries.length;
+  }
+  checkTerminal(state);
+  setStatus(state.state === 2 ? 'Finished' : 'Running');
 });
 
 // ─── terminal overlay ────────────────────────────────────────
@@ -448,7 +457,7 @@ btnNew.addEventListener('click', () => {
     if (isNaN(w) || isNaN(h) || w < 1 || h < 1) return;
     const state = engine.init(w, h);
     draw(state);
-    clearLog();
+    clearExecutionLog();
     setStatus('New terrain ' + w + '×' + h);
 });
 
@@ -471,7 +480,7 @@ btnSample.addEventListener('click', () => {
 
     const state = engine.loadTerrain(ter);
   draw(state);
-    clearLog();
+    clearExecutionLog();
     setStatus('Sample terrain loaded');
 });
 
@@ -486,7 +495,7 @@ btnSample.addEventListener('click', () => {
       const text = await file.text();
       const state = engine.loadTerrain(text);
       draw(state);
-      clearLog();
+      clearExecutionLog();
       setStatus(`Loaded ${file.name}`);
     } catch (err) {
       console.error(err);
@@ -603,7 +612,7 @@ btnSavePlus?.addEventListener('click', async () => {
 
 // ─── program controls ─────────────────────────────────────────
 btnRun.addEventListener('click', () => {
-    clearLog();
+  clearExecutionLog();
     engine.start();
   resetProgramText = editor.value ?? '';
 
@@ -636,7 +645,7 @@ btnStep.addEventListener('click', () => {
         engine.start();
         resetProgramText = editor.value ?? '';
         compileProgram(editor.value);
-        clearLog();
+        clearExecutionLog();
     }
     const hasMore = stepProgram();
     if (!hasMore) {
@@ -666,7 +675,7 @@ btnReset.addEventListener('click', () => {
     overlay.classList.remove('visible');
     termInput.value = '';
   draw(state);
-    clearLog();
+    clearExecutionLog();
     btnRun.disabled  = false;
     btnStep.disabled = false;
     btnStop.disabled = true;
@@ -713,6 +722,11 @@ window.addEventListener('mouseup', () => {
 // ─── helpers ──────────────────────────────────────────────────
 function setStatus(msg) {
     statusEl.textContent = msg;
+}
+
+function clearExecutionLog() {
+  clearLog();
+  renderedLogCount = 0;
 }
 
 function updateLoadedSourcesPanel() {
@@ -795,7 +809,7 @@ async function loadProgramFromFiles(files, options = {}) {
     const terrainText = await companionTer.text();
     const state = engine.loadTerrain(terrainText);
     draw(state);
-    clearLog();
+    clearExecutionLog();
     loadedProgramFiles.push(companionTer.name);
     updateLoadedSourcesPanel();
     setStatus(`Loaded ${currentProgramFilename} + ${companionHams.length} companion .ham + ${companionTer.name}`);
