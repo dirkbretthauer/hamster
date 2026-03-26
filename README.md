@@ -55,8 +55,10 @@ teavm-prototype/
     program when available, otherwise the first `.ter` in the folder).
 - New **Loaded Sources** panel shows the selected folder and every loaded
     source/terrain file.
-- `Load .ham` (multi-select) now also supports entry + companion `.ham` files
-    in one action.
+- Selecting a `.ham` file in the Explorer loads that file into the program
+    editor and marks it as the active run target.
+- The single **Save** button writes the current program editor content back to
+    the selected file when the browser provides writable file handles.
 
 These changes are implemented in `src/main/webapp/index.html`.
 
@@ -70,6 +72,8 @@ These changes are implemented in `src/main/webapp/index.html`.
     object construction, member calls, array indexing/assignment, terminal input,
     and common Hamster constants (`NORD`, `OST`, `SUED`, `WEST`).
 - Folder-based companion file loading for multi-file samples.
+- Compatibility parsing and execution for classic `for (...)` loops used by
+    Band 2 samples.
 
 ### Current limits
 
@@ -83,9 +87,9 @@ These changes are implemented in `src/main/webapp/index.html`.
 ### Practical guidance for sample folders
 
 1. Prefer **Load Folder** for classic sample directories.
-2. Ensure the folder contains the entry `.ham`, companion `.ham`, and `.ter`.
-3. Use the **Loaded Sources** panel to verify that all expected files were
-     imported.
+2. Choose the entry `.ham` by clicking it in the **Loaded Sources** panel.
+3. Ensure the folder contains the entry `.ham`, companion `.ham`, and `.ter`.
+4. Use **Save** to persist changes to the currently selected `.ham` file.
 
 ## Prerequisites
 
