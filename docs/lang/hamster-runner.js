@@ -10,9 +10,13 @@ export class RunnerPause extends Error {
 export function createRunnerState(ast, runtime) {
     const functions = new Map();
     for (const fn of ast.functions || []) {
-        functions.set(fn.name, fn);
+        if (!functions.has(fn.name)) {
+            functions.set(fn.name, []);
+        }
+        functions.get(fn.name).push(fn);
     }
-    const main = functions.get('main');
+    const mainCandidates = functions.get('main') || [];
+    const main = mainCandidates.find(fn => (fn.parameters || []).length === 0) || null;
     if (!main) {
         throw new Error('Program must define void main()');
     }
@@ -132,6 +136,31 @@ export function executeRunnerStep(state) {
     return false;
 }
 
+const KNOWN_BUILTINS = new Set([
+    'vor',
+    'linksUm',
+    'nimm',
+    'gib',
+    'vornFrei',
+    'kornDa',
+    'maulLeer',
+    'getReihe',
+    'getSpalte',
+    'getBlickrichtung',
+    'getAnzahlKoerner',
+    'anzahlKoerner',
+    'createHamster',
+    'readInt',
+    'readString',
+]);
+
+function isKnownBuiltinName(name) {
+    if (KNOWN_BUILTINS.has(name)) return true;
+    if (name === 'Math.random') return true;
+    if (name.endsWith('.getStandardHamster') || name.endsWith('.getStandardHamsterAlsDrehHamster')) return true;
+    return false;
+}
+
 function evalExpression(node, state) {
     switch (node.type) {
         case ASTNodeType.Literal:
@@ -160,11 +189,12 @@ function evalExpression(node, state) {
         }
 
         case ASTNodeType.PostfixExpression: {
-            if (node.operator !== '--' || node.argument.type !== ASTNodeType.Identifier) {
-                throw new Error('Only identifier-- is supported');
+            if ((node.operator !== '--' && node.operator !== '++') || node.argument.type !== ASTNodeType.Identifier) {
+                throw new Error('Only identifier++/identifier-- is supported');
             }
             const current = Number(getVariable(state, node.argument.name));
-            assignVariable(state, node.argument.name, current - 1);
+            const delta = node.operator === '++' ? 1 : -1;
+            assignVariable(state, node.argument.name, current + delta);
             return current;
         }
 
@@ -189,6 +219,17 @@ function evalCallExpression(node, state, callDepth) {
         const receiver = evalExpression(node.callee.object, state);
         const methodName = node.callee.property;
         const args = node.arguments.map(arg => evalExpression(arg, state));
+
+        // Compatibility mode often models static class calls (ClassName.method(...))
+        // as top-level user functions declared in companion .ham files.
+        if (receiver && receiver.__kind === 'class') {
+            const candidates = state.functions.get(methodName) || [];
+            const fn = candidates.find(candidate => (candidate.parameters || []).length === args.length);
+            if (fn) {
+                return invokeUserFunction(fn, args, state, callDepth + 1);
+            }
+        }
+
         if (typeof state.runtime.callMethod === 'function') {
             return state.runtime.callMethod(receiver, methodName, args, state.functions);
         }
@@ -201,10 +242,21 @@ function evalCallExpression(node, state, callDepth) {
     if (!calleeName) {
         throw new Error('Unsupported call expression callee');
     }
-    const fn = state.functions.get(calleeName);
+    const candidates = state.functions.get(calleeName) || [];
+    const fn = candidates.find(candidate => (candidate.parameters || []).length === args.length);
 
     if (fn) {
         return invokeUserFunction(fn, args, state, callDepth + 1);
+    }
+
+    if (candidates.length > 0) {
+        if (isKnownBuiltinName(calleeName)) {
+            return state.runtime.callBuiltin(calleeName, args, state.functions);
+        }
+
+        const sample = candidates[0];
+        const expected = (sample.parameters || []).length;
+        throw new Error('Function ' + calleeName + ' expects ' + expected + ' arguments but got ' + args.length);
     }
 
     return state.runtime.callBuiltin(calleeName, args, state.functions);

@@ -550,10 +550,20 @@ export function hasPendingProgram() {
     return runTimerId !== null || (runnerState !== null && !runnerState.finished);
 }
 
+function normalizeCompatibilitySource(text) {
+    const source = String(text ?? '');
+    // Some legacy examples rely on postfix ++/-- in standalone statements.
+    // Normalize these forms so compatibility parsing remains robust.
+    return source
+        .replace(/(^|[^\w])([A-Za-z_][A-Za-z0-9_]*)\s*\+\+\s*;/gm, '$1$2 = $2 + 1;')
+        .replace(/(^|[^\w])([A-Za-z_][A-Za-z0-9_]*)\s*--\s*;/gm, '$1$2 = $2 - 1;');
+}
+
 export function compileProgram(text) {
     runnerState = null;
     try {
-        const ast = parseProgram(text, { compatibility: true, requireMain: true });
+        const normalizedSource = normalizeCompatibilitySource(text);
+        const ast = parseProgram(normalizedSource, { compatibility: true, requireMain: true });
         runnerState = createRunnerStateCore(ast, {
             resolveIdentifier(name) {
                 if (name === 'Hamster') {
@@ -618,6 +628,7 @@ export function compileProgram(text) {
                         case 'getReihe': return engine.getReihe(hamsterId);
                         case 'getSpalte': return engine.getSpalte(hamsterId);
                         case 'getBlickrichtung': return engine.getBlickrichtung(hamsterId);
+                        case 'anzahlKoerner':
                         case 'getAnzahlKoerner': return engine.getAnzahlKoerner(hamsterId);
                         case 'liesZahl': {
                             const prompt = args.length > 0 ? String(args[0]) : 'Enter number:';
@@ -678,6 +689,7 @@ export function compileProgram(text) {
                     case 'getReihe': return engine.getReihe(defaultHamsterId(args));
                     case 'getSpalte': return engine.getSpalte(defaultHamsterId(args));
                     case 'getBlickrichtung': return engine.getBlickrichtung(defaultHamsterId(args));
+                    case 'anzahlKoerner':
                     case 'getAnzahlKoerner': return engine.getAnzahlKoerner(defaultHamsterId(args));
                     case 'createHamster':
                         if (args.length < 4) {
@@ -893,11 +905,12 @@ function evalExpression(node, state) {
         }
 
         case ASTNodeType.PostfixExpression: {
-            if (node.operator !== '--' || node.argument.type !== ASTNodeType.Identifier) {
-                throw new Error('Only identifier-- is supported');
+            if ((node.operator !== '--' && node.operator !== '++') || node.argument.type !== ASTNodeType.Identifier) {
+                throw new Error('Only identifier++/identifier-- is supported');
             }
             const current = Number(getVariable(state, node.argument.name));
-            assignVariable(state, node.argument.name, current - 1);
+            const delta = node.operator === '++' ? 1 : -1;
+            assignVariable(state, node.argument.name, current + delta);
             return current;
         }
 
@@ -960,6 +973,7 @@ function evalCallExpression(node, state) {
         case 'getReihe': return engine.getReihe(defaultHamsterId(args));
         case 'getSpalte': return engine.getSpalte(defaultHamsterId(args));
         case 'getBlickrichtung': return engine.getBlickrichtung(defaultHamsterId(args));
+        case 'anzahlKoerner':
         case 'getAnzahlKoerner': return engine.getAnzahlKoerner(defaultHamsterId(args));
         case 'createHamster':
             if (args.length < 4) {

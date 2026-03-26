@@ -35,7 +35,7 @@
 
     /* ── main layout ─────────────────────────────────────── */
     main {
-      --left-pane-width: 380px;
+      --left-pane-width: calc((100% - 8px) / 2);
       --right-top-height: 68%;
       display: grid;
       grid-template-columns: var(--left-pane-width) 8px minmax(280px, 1fr);
@@ -84,7 +84,7 @@
     }
 
     #editor-content {
-      --files-pane-width: 1fr;
+      --files-pane-width: calc((100% - 58px - 8px) / 4);
       flex: 1;
       display: grid;
       grid-template-columns: 58px minmax(160px, var(--files-pane-width)) 8px minmax(200px, 1fr);
@@ -208,6 +208,10 @@
     }
     #sources-list .tree-row:hover {
       background: #1d1f31;
+    }
+    #sources-list .tree-row.active {
+      background: #263450;
+      box-shadow: inset 0 0 0 1px #4a74bd;
     }
     #sources-list .tree-row.interactive {
       cursor: pointer;
@@ -410,7 +414,6 @@
 </div>
 
 <input id="terrain-file-input" type="file" accept=".ter,text/plain" style="display:none" />
-<input id="program-file-input" type="file" accept=".ham,.ter,.txt,text/plain" multiple style="display:none" />
 
 <main>
   <section id="editor-wrapper">
@@ -426,10 +429,8 @@
         <button id="btn-step" class="activity-btn primary"><span class="icon">⏭</span><span>Step</span></button>
         <button id="btn-stop" class="activity-btn danger" disabled><span class="icon">⏹</span><span>Stop</span></button>
         <button id="btn-reset" class="activity-btn"><span class="icon">↺</span><span>Reset</span></button>
-        <button id="btn-import-program" class="activity-btn"><span class="icon">📂</span><span>Load</span></button>
         <button id="btn-load-folder" class="activity-btn"><span class="icon">🗀</span><span>Folder</span></button>
         <button id="btn-export-program" class="activity-btn"><span class="icon">💾</span><span>Save</span></button>
-        <button id="btn-save-plus" class="activity-btn"><span class="icon">🗋</span><span>Save+</span></button>
       </div>
 
       <div id="sources-panel" aria-live="polite">
@@ -514,10 +515,8 @@ const btnRun       = document.getElementById('btn-run');
 const btnStep      = document.getElementById('btn-step');
 const btnStop      = document.getElementById('btn-stop');
 const btnReset     = document.getElementById('btn-reset');
-const btnImportProgram = document.getElementById('btn-import-program');
 const btnLoadFolder = document.getElementById('btn-load-folder');
 const btnExportProgram = document.getElementById('btn-export-program');
-const btnSavePlus  = document.getElementById('btn-save-plus');
 const speedRange   = document.getElementById('speed-range');
 const terW         = document.getElementById('ter-w');
 const terH         = document.getElementById('ter-h');
@@ -525,7 +524,6 @@ const toolButtons  = document.querySelectorAll('[data-tool]');
 const cornInput    = document.getElementById('corn-amount');
 const hoverInfo    = document.getElementById('hover-info');
 const terrainFileInput = document.getElementById('terrain-file-input');
-const programFileInput = document.getElementById('program-file-input');
 const sourcesFolderEl = document.getElementById('sources-folder');
 const sourcesListEl = document.getElementById('sources-list');
 const sourcesEmptyEl = document.getElementById('sources-empty');
@@ -542,6 +540,9 @@ let lastPaintCell  = null;
 let currentProgramFilename = 'program.ham';
 let loadedProgramFolder = '';
 let loadedProgramFiles = [];
+let loadedCompanionPrograms = [];
+let loadedHamPrograms = [];
+let selectedProgramPath = '';
 let resetProgramText = '';
 let activeTerminalPrompt = null;
 let renderedLogCount = 0;
@@ -697,11 +698,9 @@ btnSample.addEventListener('click', () => {
   });
 
 // ─── program file workflow ─────────────────────────────────────────
-btnImportProgram?.addEventListener('click', () => programFileInput?.click());
-
 btnLoadFolder?.addEventListener('click', async () => {
   if (typeof window.showDirectoryPicker !== 'function') {
-    setStatus('Load Folder not supported in this browser. Use Load .ham and select all files.');
+    setStatus('Load Folder is not supported in this browser.');
     return;
   }
   try {
@@ -717,22 +716,32 @@ btnLoadFolder?.addEventListener('click', async () => {
   }
 });
 
-programFileInput?.addEventListener('change', async event => {
-  const input = event.target;
-  const files = Array.from(input.files || []);
-  if (files.length === 0) return;
-  try {
-    await loadProgramFromFiles(files);
-  } catch (err) {
-    console.error(err);
-    setStatus(err.message || 'Could not load program file');
-  } finally {
-    input.value = '';
-  }
-});
-
 btnExportProgram?.addEventListener('click', async () => {
-  const suggested = ensureHamExtension(currentProgramFilename || 'program.ham');
+  persistActiveEditorProgramText();
+  const activeProgram = Array.isArray(loadedHamPrograms)
+    ? loadedHamPrograms.find(file => file.path === selectedProgramPath)
+    : null;
+
+  if (activeProgram?.fileHandle && typeof activeProgram.fileHandle.createWritable === 'function') {
+    try {
+      const writable = await activeProgram.fileHandle.createWritable();
+      await writable.write(String(editor.value ?? ''));
+      await writable.close();
+      currentProgramFilename = ensureHamExtension(getFilenameFromPath(activeProgram.path) || currentProgramFilename);
+      setStatus(`Program saved: ${currentProgramFilename}`);
+      return;
+    } catch (err) {
+      if (err?.name === 'AbortError') {
+        setStatus('Save cancelled');
+        return;
+      }
+      console.error(err);
+      setStatus(err.message || 'Save failed');
+      return;
+    }
+  }
+
+  const suggested = ensureHamExtension(getFilenameFromPath(selectedProgramPath) || currentProgramFilename || 'program.ham');
   try {
     const result = await saveTextFile(suggested, editor.value ?? '', '.ham');
     if (!result.saved) return;
@@ -748,35 +757,6 @@ btnExportProgram?.addEventListener('click', async () => {
   }
 });
 
-btnSavePlus?.addEventListener('click', async () => {
-  if (!currentState?.terrain) {
-    setStatus('No terrain to save');
-    return;
-  }
-  const defaultBase = getBasenameWithoutExtension(currentProgramFilename || 'program') || 'program';
-  const base = defaultBase;
-  const hamName = ensureHamExtension(base);
-  const terName = ensureTerExtension(base);
-
-  try {
-    const hamResult = await saveTextFile(hamName, editor.value ?? '', '.ham');
-    if (!hamResult.saved) return;
-    const savedHamName = ensureHamExtension(hamResult.filename || hamName);
-    const terFromHamName = ensureTerExtension(getBasenameWithoutExtension(savedHamName));
-    const terResult = await saveTextFile(terFromHamName, terrainToTer(currentState), '.ter');
-    if (!terResult.saved) return;
-    currentProgramFilename = savedHamName;
-    setStatus(`Saved ${savedHamName} + ${terResult.filename}`);
-  } catch (err) {
-    if (err?.name === 'AbortError') {
-      setStatus('Save cancelled');
-      return;
-    }
-    console.error(err);
-    setStatus(err.message || 'Save+ failed');
-  }
-});
-
 // ─── program controls ─────────────────────────────────────────
 btnRun.addEventListener('click', () => {
   clearExecutionLog();
@@ -784,7 +764,7 @@ btnRun.addEventListener('click', () => {
   resetProgramText = editor.value ?? '';
 
     // Compile the editor content
-    const n = compileProgram(editor.value);
+    const n = compileProgram(buildCompilationSource());
     if (n === 0) { setStatus('No statements to run'); return; }
 
     setStatus('Running…');
@@ -811,7 +791,7 @@ btnStep.addEventListener('click', () => {
   if (!hasPendingProgram()) {
         engine.start();
         resetProgramText = editor.value ?? '';
-        compileProgram(editor.value);
+        compileProgram(buildCompilationSource());
         clearExecutionLog();
     }
     const hasMore = stepProgram();
@@ -894,6 +874,78 @@ function setStatus(msg) {
 function clearExecutionLog() {
   clearLog();
   renderedLogCount = 0;
+}
+
+function normalizeProgramPath(path) {
+  return String(path || '').trim().replace(/\\+/g, '/').replace(/^\/+|\/+$/g, '');
+}
+
+function persistActiveEditorProgramText() {
+  if (!selectedProgramPath || !Array.isArray(loadedHamPrograms) || loadedHamPrograms.length === 0) {
+    return;
+  }
+  const index = loadedHamPrograms.findIndex(file => file.path === selectedProgramPath);
+  if (index < 0) return;
+  loadedHamPrograms[index] = {
+    ...loadedHamPrograms[index],
+    text: String(editor.value ?? ''),
+  };
+}
+
+function refreshCompanionPrograms() {
+  if (!Array.isArray(loadedHamPrograms) || loadedHamPrograms.length === 0) {
+    loadedCompanionPrograms = [];
+    return;
+  }
+  loadedCompanionPrograms = loadedHamPrograms
+    .filter(file => file.path !== selectedProgramPath)
+    .map(file => ({ path: file.path, text: file.text }));
+}
+
+function setActiveProgramByPath(path, options = {}) {
+  const normalizedPath = normalizeProgramPath(path);
+  if (!normalizedPath || !Array.isArray(loadedHamPrograms) || loadedHamPrograms.length === 0) {
+    return false;
+  }
+
+  const target = loadedHamPrograms.find(file => file.path === normalizedPath);
+  if (!target) return false;
+
+  if (selectedProgramPath && selectedProgramPath !== normalizedPath) {
+    persistActiveEditorProgramText();
+  }
+
+  selectedProgramPath = normalizedPath;
+  editor.value = String(target.text ?? '');
+  currentProgramFilename = ensureHamExtension(getFilenameFromPath(target.path) || currentProgramFilename);
+  refreshCompanionPrograms();
+  updateLoadedSourcesPanel();
+
+  if (options.updateStatus !== false) {
+    setStatus(`Active program: ${currentProgramFilename}`);
+  }
+
+  return true;
+}
+
+function buildCompilationSource() {
+  persistActiveEditorProgramText();
+  refreshCompanionPrograms();
+
+  const mainSource = editor.value ?? '';
+  if (!Array.isArray(loadedCompanionPrograms) || loadedCompanionPrograms.length === 0) {
+    return mainSource;
+  }
+
+  const companionBlocks = loadedCompanionPrograms
+    .map(file => {
+      const filePath = String(file?.path || '').trim();
+      const text = String(file?.text || '');
+      return `\n/* companion file: ${filePath} */\n${text}`;
+    })
+    .join('');
+
+  return `${mainSource}${companionBlocks}`;
 }
 
 function clamp(value, min, max) {
@@ -987,7 +1039,7 @@ function updateLoadedSourcesPanel() {
   const root = { dirs: new Map(), files: [] };
   for (const fileEntry of files) {
     const rawPath = typeof fileEntry === 'string' ? fileEntry : (fileEntry?.path || '');
-    const normalizedPath = rawPath.replace(/\\+/g, '/').replace(/^\/+|\/+$/g, '');
+    const normalizedPath = normalizeProgramPath(rawPath);
     if (!normalizedPath) continue;
     const segments = normalizedPath.split('/').filter(Boolean);
     if (segments.length === 0) continue;
@@ -1073,7 +1125,27 @@ function updateLoadedSourcesPanel() {
     const sortedFiles = [...node.files].sort((a, b) => a.name.localeCompare(b.name));
     for (const file of sortedFiles) {
       const kind = /\.ham$/i.test(file.name) ? 'ham' : (/\.ter$/i.test(file.name) ? 'ter' : 'txt');
-      const { li } = makeNode(file.name, kind, depth);
+      const { li, row } = makeNode(file.name, kind, depth);
+      if (kind === 'ham') {
+        row.classList.add('interactive');
+        row.setAttribute('role', 'button');
+        row.tabIndex = 0;
+        const normalizedPath = normalizeProgramPath(file.fullPath);
+        if (normalizedPath && normalizedPath === selectedProgramPath) {
+          row.classList.add('active');
+        }
+
+        const activate = () => {
+          setActiveProgramByPath(file.fullPath);
+        };
+        row.addEventListener('click', activate);
+        row.addEventListener('keydown', event => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            activate();
+          }
+        });
+      }
       mount.appendChild(li);
     }
   };
@@ -1169,7 +1241,7 @@ async function collectProgramFilesFromDirectory(dirHandle, prefix = '') {
     const lowerName = String(entry.name || '').toLowerCase();
     if (!lowerName.endsWith('.ham') && !lowerName.endsWith('.ter')) continue;
     const file = await entry.getFile();
-    entries.push({ file, path: relativePath });
+    entries.push({ file, handle: entry, path: relativePath });
   }
   return entries;
 }
@@ -1183,11 +1255,11 @@ async function loadProgramFromFiles(files, options = {}) {
   const fileList = Array.from(files || []).map(item => {
     if (item && typeof item === 'object' && item.file) {
       const nativePath = typeof item.file?.path === 'string' ? item.file.path : '';
-      return { file: item.file, path: String(item.path || item.file.name || ''), nativePath };
+      return { file: item.file, fileHandle: item.handle || null, path: String(item.path || item.file.name || ''), nativePath };
     }
     const fallbackPath = item?.webkitRelativePath || item?.name || '';
     const nativePath = typeof item?.path === 'string' ? item.path : '';
-    return { file: item, path: String(fallbackPath), nativePath };
+    return { file: item, fileHandle: null, path: String(fallbackPath), nativePath };
   });
 
   const hamFiles = fileList.filter(entry => /\.ham$/i.test(entry.path || entry.file?.name || ''));
@@ -1195,21 +1267,27 @@ async function loadProgramFromFiles(files, options = {}) {
     throw new Error('No .ham files found');
   }
 
-  // Prefer the traditional entrypoint name when available.
-  const entryHam = hamFiles.find(entry => /(^|[\\/])hamsterprogramm\.ham$/i.test(entry.path || entry.file?.name || '')) || hamFiles[0];
-  const companionHams = hamFiles.filter(entry => entry !== entryHam);
+  const hamEntries = await Promise.all(hamFiles.map(async entry => ({
+    ...entry,
+    path: normalizeProgramPath(entry.path || entry.file?.name || ''),
+    text: await entry.file.text(),
+  })));
 
-  const entryText = await entryHam.file.text();
-  const companionTexts = await Promise.all(companionHams.map(async entry => {
-    const text = await entry.file.text();
-    return `\n/* companion file: ${entry.path} */\n${text}`;
+  // Prefer the traditional entrypoint names when available.
+  const preferredByName = hamEntries.find(entry => /(^|[\\/])hamsterprogram(m)?\.ham$/i.test(entry.path || entry.file?.name || ''));
+  const preferredByMain = hamEntries.find(entry => /\bvoid\s+main\s*\(\s*\)/.test(String(entry.text || '')));
+  const entryHam = preferredByName || preferredByMain || hamEntries[0];
+
+  loadedHamPrograms = hamEntries.map(entry => ({
+    path: entry.path,
+    fileHandle: entry.fileHandle || null,
+    text: entry.text,
   }));
-
-  editor.value = `${entryText}${companionTexts.join('')}`;
+  setActiveProgramByPath(entryHam.path, { updateStatus: false });
   resetProgramText = editor.value ?? '';
-  currentProgramFilename = ensureHamExtension(getFilenameFromPath(entryHam.path) || currentProgramFilename);
+  currentProgramFilename = ensureHamExtension(getFilenameFromPath(selectedProgramPath || entryHam.path) || currentProgramFilename);
 
-  const loadedNames = [entryHam.path, ...companionHams.map(entry => entry.path)];
+  const loadedNames = loadedHamPrograms.map(entry => entry.path);
   loadedProgramFolder = resolveLoadedFolderPath(fileList, options);
   loadedProgramFiles = loadedNames.map(path => ({ path }));
 
@@ -1229,7 +1307,7 @@ async function loadProgramFromFiles(files, options = {}) {
     clearExecutionLog();
     loadedProgramFiles.push({ path: companionTer.path });
     updateLoadedSourcesPanel();
-    setStatus(`Loaded ${currentProgramFilename} + ${companionHams.length} companion .ham + ${getFilenameFromPath(companionTer.path)}`);
+    setStatus(`Loaded ${currentProgramFilename} + ${Math.max(0, loadedHamPrograms.length - 1)} companion .ham + ${getFilenameFromPath(companionTer.path)}`);
     return;
   }
 
@@ -1241,11 +1319,11 @@ async function loadProgramFromFiles(files, options = {}) {
   }
 
   if (options.fromFolder) {
-    setStatus(`Loaded folder ${options.folderName}: ${currentProgramFilename} + ${companionHams.length} companion .ham (no .ter file found)`);
+    setStatus(`Loaded folder ${options.folderName}: ${currentProgramFilename} + ${Math.max(0, loadedHamPrograms.length - 1)} companion .ham (no .ter file found)`);
     return;
   }
 
-  setStatus(`Program loaded: ${currentProgramFilename} + ${companionHams.length} companion .ham (no companion .ter selected)`);
+  setStatus(`Program loaded: ${currentProgramFilename} + ${Math.max(0, loadedHamPrograms.length - 1)} companion .ham (no companion .ter selected)`);
 }
 
 updateLoadedSourcesPanel();

@@ -52,6 +52,7 @@ const MULTI_CHAR_OPERATORS = new Map([
     ['>=', 'GTE'],
     ['&&', 'AND'],
     ['||', 'OR'],
+    ['++', 'INC'],
     ['--', 'DEC'],
 ]);
 

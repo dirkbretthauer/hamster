@@ -73,7 +73,7 @@ class Parser {
                 continue;
             }
             if (this.checkKeyword('class') || this.checkKeyword('interface')) {
-                this.skipClassLikeDeclaration();
+                functions.push(...this.parseCompatibilityClassLikeDeclaration());
                 continue;
             }
             const fn = this.tryParseFunction(true);
@@ -87,6 +87,45 @@ class Parser {
             throw new HamsterParserError('Program must define void main()', this.peek());
         }
         return { type: ASTNodeType.Program, functions };
+    }
+
+    parseCompatibilityClassLikeDeclaration() {
+        const functions = [];
+
+        // consume class/interface keyword and declaration header
+        this.advance();
+        while (!this.isAtEnd() && !this.checkSymbol('{') && !this.checkSymbol(';')) {
+            this.advance();
+        }
+        if (this.matchSymbol(';')) {
+            return functions;
+        }
+        if (!this.matchSymbol('{')) {
+            return functions;
+        }
+
+        let depth = 1;
+        while (!this.isAtEnd() && depth > 0) {
+            if (depth === 1) {
+                const fn = this.tryParseFunction(true);
+                if (fn) {
+                    functions.push(fn);
+                    continue;
+                }
+            }
+
+            if (this.matchSymbol('{')) {
+                depth += 1;
+                continue;
+            }
+            if (this.matchSymbol('}')) {
+                depth -= 1;
+                continue;
+            }
+            this.advance();
+        }
+
+        return functions;
     }
 
     parseFunction(requireMain) {
@@ -120,6 +159,12 @@ class Parser {
     parseParameter() {
         this.skipModifiers();
         const typeToken = this.consumeTypeName(false);
+
+        // Accept both `Type[] name` and `Type name[]` parameter forms.
+        while (this.matchSymbol('[')) {
+            this.consumeSymbol(']', 'Expected ] after [ in parameter type');
+        }
+
         const nameToken = this.consumeIdentifier('Expected parameter name');
         while (this.matchSymbol('[')) {
             this.consumeSymbol(']', 'Expected ] after [ in parameter type');
@@ -248,24 +293,119 @@ class Parser {
         const forToken = this.consumeKeyword('for', 'Expected for');
         this.consumeSymbol('(', 'Expected ( after for');
 
-        let depth = 1;
-        while (!this.isAtEnd() && depth > 0) {
-            if (this.matchSymbol('(')) {
-                depth += 1;
-                continue;
+        let initializer = null;
+        if (!this.checkSymbol(';')) {
+            if (this.isTypeKeywordAhead()) {
+                initializer = this.parseForVariableDeclaration();
+            } else if (this.isAssignmentAhead()) {
+                initializer = this.parseForAssignment();
+            } else {
+                const expr = this.parseExpression();
+                initializer = {
+                    type: ASTNodeType.ExpressionStmt,
+                    expression: expr,
+                    loc: expr.loc,
+                };
             }
-            if (this.matchSymbol(')')) {
-                depth -= 1;
-                continue;
-            }
-            this.advance();
         }
+        this.consumeSymbol(';', 'Expected ; after for-loop initializer');
+
+        let test = null;
+        if (!this.checkSymbol(';')) {
+            test = this.parseExpression();
+        }
+        this.consumeSymbol(';', 'Expected ; after for-loop condition');
+
+        let update = null;
+        if (!this.checkSymbol(')')) {
+            if (this.isAssignmentAhead()) {
+                update = this.parseForAssignment();
+            } else {
+                const expr = this.parseExpression();
+                update = {
+                    type: ASTNodeType.ExpressionStmt,
+                    expression: expr,
+                    loc: expr.loc,
+                };
+            }
+        }
+        this.consumeSymbol(')', 'Expected ) after for-loop update');
 
         const body = this.parseStatement();
-        return {
-            type: ASTNodeType.ForStatement,
-            body,
+        let whileBody = body;
+        if (update) {
+            if (whileBody.type === ASTNodeType.Block) {
+                whileBody = {
+                    ...whileBody,
+                    statements: [...whileBody.statements, update],
+                };
+            } else {
+                whileBody = {
+                    type: ASTNodeType.Block,
+                    statements: [whileBody, update],
+                    loc: body.loc || locationFrom(forToken),
+                };
+            }
+        }
+
+        const whileNode = {
+            type: ASTNodeType.WhileStatement,
+            test: test || {
+                type: ASTNodeType.Literal,
+                value: true,
+                literalType: 'boolean',
+                loc: locationFrom(forToken),
+            },
+            body: whileBody,
             loc: locationFrom(forToken),
+        };
+
+        if (!initializer) {
+            return whileNode;
+        }
+
+        return {
+            type: ASTNodeType.Block,
+            statements: [initializer, whileNode],
+            loc: locationFrom(forToken),
+        };
+    }
+
+    parseForVariableDeclaration() {
+        this.skipModifiers();
+        const typeToken = this.consumeTypeName(false);
+        while (this.matchSymbol('[')) {
+            this.consumeSymbol(']', 'Expected ] after [ in variable type');
+        }
+        const nameToken = this.consumeIdentifier('Expected variable name');
+        while (this.matchSymbol('[')) {
+            this.consumeSymbol(']', 'Expected ] after [ in variable name declarator');
+        }
+
+        let initializer = null;
+        if (this.matchOperator('=')) {
+            initializer = this.parseExpression();
+        }
+
+        return {
+            type: ASTNodeType.VariableDecl,
+            varType: typeToken.value,
+            name: nameToken.value,
+            initializer,
+            loc: locationFrom(nameToken),
+        };
+    }
+
+    parseForAssignment() {
+        const target = this.parseAssignableExpression();
+        this.consumeOperator('=', 'Expected = in assignment');
+        const value = this.parseExpression();
+        return {
+            type: ASTNodeType.Assignment,
+            name: target.type === ASTNodeType.Identifier ? target.name : null,
+            target,
+            value,
+            loc: target.loc,
         };
     }
 
@@ -456,7 +596,7 @@ class Parser {
             }
             break;
         }
-        if (this.matchOperator('--')) {
+        if (this.matchOperator('++') || this.matchOperator('--')) {
             const operator = this.previous();
             expr = {
                 type: ASTNodeType.PostfixExpression,
