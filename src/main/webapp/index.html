@@ -54,6 +54,16 @@
       border: 1px solid #313244;
       border-radius: 6px;
       display: flex;
+      flex-direction: column;
+      align-items: stretch;
+      justify-content: flex-start;
+      overflow: hidden;
+      padding: 0;
+    }
+    #sim-canvas-wrap {
+      flex: 1;
+      min-height: 0;
+      display: flex;
       align-items: center;
       justify-content: center;
       overflow: auto;
@@ -339,6 +349,7 @@
       flex-wrap: wrap;
       align-items: center;
       flex-shrink: 0;
+      width: 100%;
     }
     #toolbar label { font-size: .8rem; color: #6c7086; }
     .tool-group { display: flex; align-items: center; gap: .3rem; flex-wrap: wrap; }
@@ -390,29 +401,6 @@
   <span id="loading-msg" style="font-size:.8rem;color:#f38ba8">Loading engine…</span>
 </header>
 
-<div id="toolbar">
-  <label>W <input id="ter-w" type="number" class="terrain-size" value="10" min="1" max="30" style="width:50px;background:#1e1e2e;color:#cdd6f4;border:1px solid #45475a;padding:.2rem .4rem;border-radius:4px;font-size:.82rem;"></label>
-  <label>H <input id="ter-h" type="number" class="terrain-size" value="8"  min="1" max="20" style="width:50px;background:#1e1e2e;color:#cdd6f4;border:1px solid #45475a;padding:.2rem .4rem;border-radius:4px;font-size:.82rem;"></label>
-  <button id="btn-new">New Terrain</button>
-  <button id="btn-load-sample">Load Sample</button>
-  <button id="btn-import-terrain">Import .ter</button>
-  <button id="btn-export-terrain">Export .ter</button>
-  <label style="margin-left:.5rem">Speed <input id="speed-range" type="range" min="50" max="1000" value="400" step="50"></label>
-  <div class="tool-group" style="margin-left:.5rem">
-    <span style="font-size:.75rem;color:#6c7086;margin-right:.2rem">Edit</span>
-    <button class="tool-button active" data-tool="wall">Wall</button>
-    <button class="tool-button" data-tool="erase">Erase</button>
-    <button class="tool-button" data-tool="corn">Corn</button>
-    <button class="tool-button" data-tool="hamster">Move</button>
-    <button class="tool-button" data-tool="rotate">Rotate</button>
-    <label style="font-size:.75rem;color:#6c7086;display:flex;align-items:center;gap:.2rem">Corn
-      <input id="corn-amount" type="number" min="0" value="1">
-    </label>
-    <span id="hover-info">Row –, Col –</span>
-  </div>
-  <span id="status">Ready</span>
-</div>
-
 <input id="terrain-file-input" type="file" accept=".ter,text/plain" style="display:none" />
 
 <main>
@@ -459,7 +447,30 @@ void main() {
   <div id="v-splitter" class="splitter" role="separator" aria-label="Resize editor and simulation"></div>
 
   <section id="sim-wrapper">
-    <canvas id="sim-canvas"></canvas>
+    <div id="toolbar">
+      <label>W <input id="ter-w" type="number" class="terrain-size" value="10" min="1" max="30" style="width:50px;background:#1e1e2e;color:#cdd6f4;border:1px solid #45475a;padding:.2rem .4rem;border-radius:4px;font-size:.82rem;"></label>
+      <label>H <input id="ter-h" type="number" class="terrain-size" value="8"  min="1" max="20" style="width:50px;background:#1e1e2e;color:#cdd6f4;border:1px solid #45475a;padding:.2rem .4rem;border-radius:4px;font-size:.82rem;"></label>
+      <button id="btn-new">New Terrain</button>
+      <button id="btn-import-terrain">Import .ter</button>
+      <button id="btn-export-terrain">Export .ter</button>
+      <label style="margin-left:.5rem">Speed <input id="speed-range" type="range" min="50" max="1000" value="400" step="50"></label>
+      <div class="tool-group" style="margin-left:.5rem">
+        <span style="font-size:.75rem;color:#6c7086;margin-right:.2rem">Edit</span>
+        <button class="tool-button active" data-tool="wall">Wall</button>
+        <button class="tool-button" data-tool="erase">Erase</button>
+        <button class="tool-button" data-tool="corn">Corn</button>
+        <button class="tool-button" data-tool="hamster">Move</button>
+        <button class="tool-button" data-tool="rotate">Rotate</button>
+        <label style="font-size:.75rem;color:#6c7086;display:flex;align-items:center;gap:.2rem">Corn
+          <input id="corn-amount" type="number" min="0" value="1">
+        </label>
+        <span id="hover-info">Row –, Col –</span>
+      </div>
+      <span id="status">Ready</span>
+    </div>
+    <div id="sim-canvas-wrap">
+      <canvas id="sim-canvas"></canvas>
+    </div>
   </section>
 
   <div id="h-splitter" class="splitter" role="separator" aria-label="Resize simulation and execution log"></div>
@@ -508,7 +519,6 @@ const termInput    = document.getElementById('terminal-input');
 const termSubmit   = document.getElementById('terminal-submit');
 
 const btnNew       = document.getElementById('btn-new');
-const btnSample    = document.getElementById('btn-load-sample');
 const btnImport    = document.getElementById('btn-import-terrain');
 const btnExport    = document.getElementById('btn-export-terrain');
 const btnRun       = document.getElementById('btn-run');
@@ -627,29 +637,6 @@ btnNew.addEventListener('click', () => {
     draw(state);
     clearExecutionLog();
     setStatus('New terrain ' + w + '×' + h);
-});
-
-btnSample.addEventListener('click', () => {
-    // A small pre-built terrain: 8×5 with a wall corridor and some corn
-    const ter = [
-        '8',      // width
-        '5',      // height
-        // grid  (# = wall, spaces = empty, > = default hamster East)
-        '#      #',
-        '# *  * #',
-        '#>     #',
-        '# *  * #',
-        '#      #',
-        // corn counts (4 grain cells, each has 2 grains)
-        '2','2','2','2',
-        // default hamster mouth count
-        '0'
-    ].join('\n');
-
-    const state = engine.loadTerrain(ter);
-  draw(state);
-    clearExecutionLog();
-    setStatus('Sample terrain loaded');
 });
 
   // ─── terrain file workflow ─────────────────────────────────────────
