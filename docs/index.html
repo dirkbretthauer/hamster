@@ -3,8 +3,16 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Hamster Simulator – TeaVM Prototype</title>
+  <title>Hamster Simulator – Die Programmier-Schule ohne Namen</title>
   <style>
+    :root {
+      --accent-blue: #4a74bd;
+      --accent-blue-soft: #9bc0ff;
+      --accent-orange: #d97706;
+      --accent-orange-soft: #fbbf24;
+      --accent-orange-bg: #3b2a12;
+    }
+
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     body {
@@ -27,10 +35,10 @@
       border-bottom: 1px solid #313244;
       flex-shrink: 0;
     }
-    header h1 { font-size: 1.1rem; color: #cba6f7; }
+    header h1 { font-size: 1.1rem; color: var(--accent-orange-soft); }
     header .badge {
       font-size: .7rem; background: #45475a; padding: .2rem .5rem;
-      border-radius: 4px; color: #a6e3a1;
+      border-radius: 4px; color: var(--accent-orange-soft);
     }
 
     /* ── main layout ─────────────────────────────────────── */
@@ -82,17 +90,6 @@
       flex-direction: column;
       overflow: hidden;
     }
-    #editor-wrapper .panel-title {
-      padding: .4rem .8rem;
-      font-size: .8rem;
-      color: #89b4fa;
-      background: #1e1e2e;
-      border-bottom: 1px solid #313244;
-      display: flex;
-      align-items: center;
-      gap: .5rem;
-    }
-
     #editor-content {
       --files-pane-width: calc((100% - 58px - 8px) / 4);
       flex: 1;
@@ -118,8 +115,8 @@
     }
 
     #editor-activity-bar {
-      background: #171826;
-      border-right: 1px solid #313244;
+      background: linear-gradient(180deg, #171826 0%, #1f1b14 100%);
+      border-right: 1px solid var(--accent-orange);
       padding: .45rem .3rem;
       display: flex;
       flex-direction: column;
@@ -132,10 +129,10 @@
     .activity-btn {
       min-height: 44px;
       padding: .35rem .2rem;
-      border: 1px solid #3a3d54;
+      border: 1px solid #5a4630;
       border-radius: 6px;
-      background: #23263a;
-      color: #cdd6f4;
+      background: #2a2923;
+      color: #f4d7aa;
       display: flex;
       flex-direction: column;
       justify-content: center;
@@ -147,6 +144,12 @@
       text-align: center;
     }
 
+    .activity-btn:hover:not(:disabled) {
+      background: #3a2d1c;
+      border-color: var(--accent-orange);
+      color: var(--accent-orange-soft);
+    }
+
     .activity-btn .icon {
       font-size: .88rem;
       line-height: 1;
@@ -154,8 +157,14 @@
 
     .activity-btn.primary {
       background: #1f2d4a;
-      border-color: #4a74bd;
-      color: #9bc0ff;
+      border-color: var(--accent-blue);
+      color: var(--accent-blue-soft);
+    }
+
+    .activity-btn.terrain {
+      background: var(--accent-orange-bg);
+      border-color: var(--accent-orange);
+      color: var(--accent-orange-soft);
     }
 
     .activity-btn.success {
@@ -242,7 +251,7 @@
     }
     #sources-list .tree-node.kind-dir > .tree-row .tree-name { color: #9fc5ff; }
     #sources-list .tree-node.kind-ham > .tree-row .tree-name { color: #a6e3a1; }
-    #sources-list .tree-node.kind-ter > .tree-row .tree-name { color: #f9e2af; }
+    #sources-list .tree-node.kind-ter > .tree-row .tree-name { color: var(--accent-orange-soft); }
     #sources-list .tree-node.kind-txt > .tree-row .tree-name { color: #bac2de; }
     #sources-list .tree-children {
       list-style: none;
@@ -339,6 +348,15 @@
     button.danger  { background: #7f1d1d; border-color: #f87171; color: #f87171; }
     button:disabled { opacity: .4; cursor: default; }
 
+    button.terrain-accent {
+      background: var(--accent-orange-bg);
+      border-color: var(--accent-orange);
+      color: var(--accent-orange-soft);
+    }
+    button.terrain-accent:hover {
+      background: #4a3415;
+    }
+
     /* ── toolbar ─────────────────────────────────────────── */
     #toolbar {
       display: flex;
@@ -359,12 +377,12 @@
       padding: .3rem .6rem;
       font-size: .75rem;
     }
-    .tool-button.active { background: #cba6f7; color: #1e1e2e; border-color: #cba6f7; }
+    .tool-button.active { background: var(--accent-orange); color: #1e1e2e; border-color: var(--accent-orange-soft); }
     #corn-amount { width: 56px; background: #1e1e2e; color: #cdd6f4; border: 1px solid #45475a; border-radius: 4px; padding: .2rem .3rem; }
     #hover-info { font-size: .75rem; color: #a6adc8; min-width: 180px; }
     #terrain-size  { background: #1e1e2e; color: #cdd6f4; border: 1px solid #45475a;
                      padding: .2rem .4rem; border-radius: 4px; width: 50px; font-size: .82rem; }
-    #speed-range   { width: 90px; accent-color: #cba6f7; }
+    #speed-range   { width: 90px; accent-color: var(--accent-orange); }
     #status        { margin-left: auto; font-size: .78rem; color: #6c7086; }
 
     .panel-title { padding: .4rem .8rem; font-size: .8rem; color: #89b4fa;
@@ -397,22 +415,16 @@
 
 <header>
   <h1>🐹 Hamster Simulator</h1>
-  <span class="badge">TeaVM Prototype</span>
+  <span class="badge">Die Programmier-Schule ohne Namen</span>
   <span id="loading-msg" style="font-size:.8rem;color:#f38ba8">Loading engine…</span>
 </header>
 
-<input id="terrain-file-input" type="file" accept=".ter,text/plain" style="display:none" />
-
 <main>
   <section id="editor-wrapper">
-    <div class="panel-title">
-      📝 Program
-      <span style="font-size:.72rem;color:#6c7086;margin-left:auto">
-        Available: vor() linksUm() nimm() gib() vornFrei() kornDa() maulLeer() readInt() readString()
-      </span>
-    </div>
     <div id="editor-content">
       <div id="editor-activity-bar" aria-label="Program actions">
+        <button id="btn-add-file" class="activity-btn" title="Add Program (.ham)"><span>Add Program</span></button>
+        <button id="btn-add-terrain-file" class="activity-btn terrain" title="Add Terrain (.ter)"><span>Add Terrain</span></button>
         <button id="btn-run" class="activity-btn primary success"><span class="icon">▶</span><span>Run</span></button>
         <button id="btn-step" class="activity-btn primary"><span class="icon">⏭</span><span>Step</span></button>
         <button id="btn-stop" class="activity-btn danger" disabled><span class="icon">⏹</span><span>Stop</span></button>
@@ -450,9 +462,7 @@ void main() {
     <div id="toolbar">
       <label>W <input id="ter-w" type="number" class="terrain-size" value="10" min="1" max="30" style="width:50px;background:#1e1e2e;color:#cdd6f4;border:1px solid #45475a;padding:.2rem .4rem;border-radius:4px;font-size:.82rem;"></label>
       <label>H <input id="ter-h" type="number" class="terrain-size" value="8"  min="1" max="20" style="width:50px;background:#1e1e2e;color:#cdd6f4;border:1px solid #45475a;padding:.2rem .4rem;border-radius:4px;font-size:.82rem;"></label>
-      <button id="btn-new">New Terrain</button>
-      <button id="btn-import-terrain">Import .ter</button>
-      <button id="btn-export-terrain">Export .ter</button>
+      <button id="btn-new" class="terrain-accent">New Terrain</button>
       <label style="margin-left:.5rem">Speed <input id="speed-range" type="range" min="50" max="1000" value="400" step="50"></label>
       <div class="tool-group" style="margin-left:.5rem">
         <span style="font-size:.75rem;color:#6c7086;margin-right:.2rem">Edit</span>
@@ -519,8 +529,8 @@ const termInput    = document.getElementById('terminal-input');
 const termSubmit   = document.getElementById('terminal-submit');
 
 const btnNew       = document.getElementById('btn-new');
-const btnImport    = document.getElementById('btn-import-terrain');
-const btnExport    = document.getElementById('btn-export-terrain');
+const btnAddFile   = document.getElementById('btn-add-file');
+const btnAddTerrainFile = document.getElementById('btn-add-terrain-file');
 const btnRun       = document.getElementById('btn-run');
 const btnStep      = document.getElementById('btn-step');
 const btnStop      = document.getElementById('btn-stop');
@@ -533,7 +543,6 @@ const terH         = document.getElementById('ter-h');
 const toolButtons  = document.querySelectorAll('[data-tool]');
 const cornInput    = document.getElementById('corn-amount');
 const hoverInfo    = document.getElementById('hover-info');
-const terrainFileInput = document.getElementById('terrain-file-input');
 const sourcesFolderEl = document.getElementById('sources-folder');
 const sourcesListEl = document.getElementById('sources-list');
 const sourcesEmptyEl = document.getElementById('sources-empty');
@@ -549,10 +558,13 @@ let isDragging     = false;
 let lastPaintCell  = null;
 let currentProgramFilename = 'program.ham';
 let loadedProgramFolder = '';
+let loadedProgramFolderHandle = null;
 let loadedProgramFiles = [];
 let loadedCompanionPrograms = [];
 let loadedHamPrograms = [];
+let loadedTerrainFiles = [];
 let selectedProgramPath = '';
+let selectedTerrainPath = '';
 let resetProgramText = '';
 let activeTerminalPrompt = null;
 let renderedLogCount = 0;
@@ -639,51 +651,6 @@ btnNew.addEventListener('click', () => {
     setStatus('New terrain ' + w + '×' + h);
 });
 
-  // ─── terrain file workflow ─────────────────────────────────────────
-  btnImport?.addEventListener('click', () => terrainFileInput?.click());
-
-  terrainFileInput?.addEventListener('change', async event => {
-    const input = event.target;
-    const file = input.files?.[0];
-    if (!file) return;
-    try {
-      const text = await file.text();
-      const state = engine.loadTerrain(text);
-      draw(state);
-      clearExecutionLog();
-      setStatus(`Loaded ${file.name}`);
-    } catch (err) {
-      console.error(err);
-      setStatus(err.message || 'Invalid .ter file');
-    } finally {
-      input.value = '';
-    }
-  });
-
-  btnExport?.addEventListener('click', async () => {
-    if (!currentState?.terrain) {
-      setStatus('Nothing to export');
-      return;
-    }
-    try {
-      const terText = terrainToTer(currentState);
-      const w = currentState.terrain.width;
-      const h = currentState.terrain.height;
-      const filename = `terrain-${w}x${h}.ter`;
-      const result = await saveTextFile(filename, terText, '.ter');
-      if (result.saved) {
-        setStatus(`Terrain saved: ${result.filename}`);
-      }
-    } catch (err) {
-      if (err?.name === 'AbortError') {
-        setStatus('Save cancelled');
-        return;
-      }
-      console.error(err);
-      setStatus(err.message || 'Export failed');
-    }
-  });
-
 // ─── program file workflow ─────────────────────────────────────────
 btnLoadFolder?.addEventListener('click', async () => {
   if (typeof window.showDirectoryPicker !== 'function') {
@@ -691,7 +658,7 @@ btnLoadFolder?.addEventListener('click', async () => {
     return;
   }
   try {
-    const dirHandle = await window.showDirectoryPicker({ mode: 'read' });
+    const dirHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
     await loadProgramFromDirectory(dirHandle);
   } catch (err) {
     if (err?.name === 'AbortError') {
@@ -700,6 +667,118 @@ btnLoadFolder?.addEventListener('click', async () => {
     }
     console.error(err);
     setStatus(err.message || 'Could not load folder');
+  }
+});
+
+btnAddFile?.addEventListener('click', async () => {
+  if (!loadedProgramFolderHandle || typeof loadedProgramFolderHandle.getFileHandle !== 'function') {
+    setStatus('Open a folder first to add files');
+    return;
+  }
+
+  const requestedName = window.prompt('New file name (.ham):', 'new-program.ham');
+  if (requestedName == null) {
+    setStatus('Create file cancelled');
+    return;
+  }
+
+  const trimmedName = String(requestedName || '').trim();
+  if (!trimmedName) {
+    setStatus('File name is required');
+    return;
+  }
+
+  const filename = ensureHamExtension(trimmedName.replace(/[\\/]+/g, ''));
+  if (!filename) {
+    setStatus('Invalid file name');
+    return;
+  }
+
+  if (loadedHamPrograms.some(file => normalizeProgramPath(file.path) === normalizeProgramPath(filename))) {
+    setStatus(`File already exists in explorer: ${filename}`);
+    return;
+  }
+
+  try {
+    const fileHandle = await loadedProgramFolderHandle.getFileHandle(filename, { create: true });
+    const writable = await fileHandle.createWritable();
+    await writable.write('');
+    await writable.close();
+
+    const normalizedPath = normalizeProgramPath(filename);
+    loadedHamPrograms.push({
+      path: normalizedPath,
+      fileHandle,
+      text: '',
+    });
+    loadedProgramFiles.push({ path: normalizedPath });
+    setActiveProgramByPath(normalizedPath, { updateStatus: false });
+    resetProgramText = editor.value ?? '';
+    setStatus(`Created file: ${filename}`);
+  } catch (err) {
+    if (err?.name === 'AbortError') {
+      setStatus('Create file cancelled');
+      return;
+    }
+    console.error(err);
+    setStatus(err?.message || 'Could not create file in opened folder');
+  }
+});
+
+btnAddTerrainFile?.addEventListener('click', async () => {
+  if (!loadedProgramFolderHandle || typeof loadedProgramFolderHandle.getFileHandle !== 'function') {
+    setStatus('Open a folder first to add files');
+    return;
+  }
+
+  const requestedName = window.prompt('New terrain file name (.ter):', 'new-terrain.ter');
+  if (requestedName == null) {
+    setStatus('Create terrain file cancelled');
+    return;
+  }
+
+  const trimmedName = String(requestedName || '').trim();
+  if (!trimmedName) {
+    setStatus('File name is required');
+    return;
+  }
+
+  const filename = ensureTerExtension(trimmedName.replace(/[\\/]+/g, ''));
+  if (!filename) {
+    setStatus('Invalid file name');
+    return;
+  }
+
+  if (loadedTerrainFiles.some(file => normalizeProgramPath(file.path) === normalizeProgramPath(filename))) {
+    setStatus(`Terrain file already exists in explorer: ${filename}`);
+    return;
+  }
+
+  try {
+    const terText = currentState?.terrain ? terrainToTer(currentState) : '';
+    const fileHandle = await loadedProgramFolderHandle.getFileHandle(filename, { create: true });
+    const writable = await fileHandle.createWritable();
+    await writable.write(terText);
+    await writable.close();
+
+    const normalizedPath = normalizeProgramPath(filename);
+    loadedTerrainFiles.push({
+      path: normalizedPath,
+      fileHandle,
+      text: terText,
+    });
+    if (!loadedProgramFiles.some(entry => normalizeProgramPath(entry?.path || '') === normalizedPath)) {
+      loadedProgramFiles.push({ path: normalizedPath });
+    }
+    loadTerrainByPath(normalizedPath, { updateStatus: false });
+    setStatus(`Created terrain file: ${filename}`);
+  } catch (err) {
+    if (err?.name === 'AbortError') {
+      setStatus('Create terrain file cancelled');
+      return;
+    }
+    console.error(err);
+    setStatus(err?.message || 'Could not create terrain file in opened folder');
   }
 });
 
@@ -915,6 +994,34 @@ function setActiveProgramByPath(path, options = {}) {
   return true;
 }
 
+function loadTerrainByPath(path, options = {}) {
+  const normalizedPath = normalizeProgramPath(path);
+  if (!normalizedPath || !Array.isArray(loadedTerrainFiles) || loadedTerrainFiles.length === 0) {
+    return false;
+  }
+
+  const target = loadedTerrainFiles.find(file => file.path === normalizedPath);
+  if (!target) return false;
+
+  try {
+    const state = engine.loadTerrain(String(target.text ?? ''));
+    draw(state);
+    clearExecutionLog();
+    selectedTerrainPath = normalizedPath;
+    updateLoadedSourcesPanel();
+    if (options.updateStatus !== false) {
+      setStatus(`Terrain loaded: ${getFilenameFromPath(target.path)}`);
+    }
+    return true;
+  } catch (err) {
+    console.error(err);
+    if (options.updateStatus !== false) {
+      setStatus(err?.message || 'Invalid .ter file');
+    }
+    return false;
+  }
+}
+
 function buildCompilationSource() {
   persistActiveEditorProgramText();
   refreshCompanionPrograms();
@@ -1011,6 +1118,12 @@ function initResizablePanes() {
 }
 
 function updateLoadedSourcesPanel() {
+  if (btnAddFile) {
+    btnAddFile.disabled = !loadedProgramFolderHandle;
+  }
+  if (btnAddTerrainFile) {
+    btnAddTerrainFile.disabled = !loadedProgramFolderHandle;
+  }
   if (sourcesFolderEl) {
     sourcesFolderEl.textContent = `Folder: ${loadedProgramFolder || 'none'}`;
   }
@@ -1113,17 +1226,24 @@ function updateLoadedSourcesPanel() {
     for (const file of sortedFiles) {
       const kind = /\.ham$/i.test(file.name) ? 'ham' : (/\.ter$/i.test(file.name) ? 'ter' : 'txt');
       const { li, row } = makeNode(file.name, kind, depth);
-      if (kind === 'ham') {
+      if (kind === 'ham' || kind === 'ter') {
         row.classList.add('interactive');
         row.setAttribute('role', 'button');
         row.tabIndex = 0;
         const normalizedPath = normalizeProgramPath(file.fullPath);
-        if (normalizedPath && normalizedPath === selectedProgramPath) {
+        if (normalizedPath && (
+          (kind === 'ham' && normalizedPath === selectedProgramPath)
+          || (kind === 'ter' && normalizedPath === selectedTerrainPath)
+        )) {
           row.classList.add('active');
         }
 
         const activate = () => {
-          setActiveProgramByPath(file.fullPath);
+          if (kind === 'ham') {
+            setActiveProgramByPath(file.fullPath);
+            return;
+          }
+          loadTerrainByPath(file.fullPath);
         };
         row.addEventListener('click', activate);
         row.addEventListener('keydown', event => {
@@ -1234,11 +1354,15 @@ async function collectProgramFilesFromDirectory(dirHandle, prefix = '') {
 }
 
 async function loadProgramFromDirectory(dirHandle) {
+  loadedProgramFolderHandle = dirHandle || null;
   const files = await collectProgramFilesFromDirectory(dirHandle);
-  await loadProgramFromFiles(files, { fromFolder: true, folderName: dirHandle.name || 'folder' });
+  await loadProgramFromFiles(files, { fromFolder: true, folderName: dirHandle.name || 'folder', folderHandle: dirHandle || null });
 }
 
 async function loadProgramFromFiles(files, options = {}) {
+  if (Object.prototype.hasOwnProperty.call(options, 'folderHandle')) {
+    loadedProgramFolderHandle = options.folderHandle || null;
+  }
   const fileList = Array.from(files || []).map(item => {
     if (item && typeof item === 'object' && item.file) {
       const nativePath = typeof item.file?.path === 'string' ? item.file.path : '';
@@ -1259,6 +1383,15 @@ async function loadProgramFromFiles(files, options = {}) {
     path: normalizeProgramPath(entry.path || entry.file?.name || ''),
     text: await entry.file.text(),
   })));
+  const terEntries = await Promise.all(
+    fileList
+      .filter(entry => /\.ter$/i.test(entry.path || entry.file?.name || ''))
+      .map(async entry => ({
+        ...entry,
+        path: normalizeProgramPath(entry.path || entry.file?.name || ''),
+        text: await entry.file.text(),
+      }))
+  );
 
   // Prefer the traditional entrypoint names when available.
   const preferredByName = hamEntries.find(entry => /(^|[\\/])hamsterprogram(m)?\.ham$/i.test(entry.path || entry.file?.name || ''));
@@ -1270,11 +1403,20 @@ async function loadProgramFromFiles(files, options = {}) {
     fileHandle: entry.fileHandle || null,
     text: entry.text,
   }));
+  loadedTerrainFiles = terEntries.map(entry => ({
+    path: entry.path,
+    fileHandle: entry.fileHandle || null,
+    text: entry.text,
+  }));
+  selectedTerrainPath = '';
   setActiveProgramByPath(entryHam.path, { updateStatus: false });
   resetProgramText = editor.value ?? '';
   currentProgramFilename = ensureHamExtension(getFilenameFromPath(selectedProgramPath || entryHam.path) || currentProgramFilename);
 
-  const loadedNames = loadedHamPrograms.map(entry => entry.path);
+  const loadedNames = [
+    ...loadedHamPrograms.map(entry => entry.path),
+    ...loadedTerrainFiles.map(entry => entry.path),
+  ];
   loadedProgramFolder = resolveLoadedFolderPath(fileList, options);
   loadedProgramFiles = loadedNames.map(path => ({ path }));
 
@@ -1288,11 +1430,7 @@ async function loadProgramFromFiles(files, options = {}) {
   }
 
   if (companionTer) {
-    const terrainText = await companionTer.file.text();
-    const state = engine.loadTerrain(terrainText);
-    draw(state);
-    clearExecutionLog();
-    loadedProgramFiles.push({ path: companionTer.path });
+    loadTerrainByPath(companionTer.path, { updateStatus: false });
     updateLoadedSourcesPanel();
     setStatus(`Loaded ${currentProgramFilename} + ${Math.max(0, loadedHamPrograms.length - 1)} companion .ham + ${getFilenameFromPath(companionTer.path)}`);
     return;

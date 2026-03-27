@@ -342,16 +342,39 @@ export const CELL_SIZE = CELL;
 const COLORS = ['#f5c518','#e74c3c','#2ecc71','#3498db','#9b59b6','#e67e22'];
 const DIRS   = ['↑','→','↓','←'];   // N E S W
 const DIR_TO_TER = ['^','>','v','<'];
+const HAMSTER_SPRITE_PATHS = [
+    './assets/original/hamsternorth.png',
+    './assets/original/hamstereast.png',
+    './assets/original/hamstersouth.png',
+    './assets/original/hamsterwest.png',
+];
 
 let canvas, ctx;
+let hamsterSprites = [];
+let lastRenderedState = null;
+
+function createSprite(path, onReady) {
+    const img = new Image();
+    if (typeof onReady === 'function') {
+        img.addEventListener('load', onReady);
+    }
+    img.src = path;
+    return img;
+}
 
 export function initCanvas(canvasEl) {
     canvas = canvasEl;
     ctx    = canvas.getContext('2d');
+    hamsterSprites = HAMSTER_SPRITE_PATHS.map(path => createSprite(path, () => {
+        if (lastRenderedState) {
+            render(lastRenderedState);
+        }
+    }));
 }
 
 export function render(state) {
     if (!state || !ctx) return;
+    lastRenderedState = state;
     const { terrain } = state;
     const { width, height, walls, corn, hamsters } = terrain;
 
@@ -399,6 +422,30 @@ export function render(state) {
 }
 
 function drawHamster(h) {
+    const dir = ((h.dir % 4) + 4) % 4;
+    const sprite = hamsterSprites[dir];
+    if (sprite && sprite.complete && sprite.naturalWidth > 0 && sprite.naturalHeight > 0) {
+        const x = h.x * CELL;
+        const y = h.y * CELL;
+        const padding = Math.max(2, Math.floor(CELL * 0.08));
+        ctx.drawImage(sprite, x + padding, y + padding, CELL - (padding * 2), CELL - (padding * 2));
+
+        if (h.mouth > 0) {
+            const badgeX = x + CELL * 0.78;
+            const badgeY = y + CELL * 0.22;
+            ctx.fillStyle = '#e74c3c';
+            ctx.beginPath();
+            ctx.arc(badgeX, badgeY, CELL*0.16, 0, Math.PI*2);
+            ctx.fill();
+            ctx.fillStyle = '#fff';
+            ctx.font = `bold ${CELL*0.2}px sans-serif`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(h.mouth, badgeX, badgeY);
+        }
+        return;
+    }
+
     const px = h.x * CELL + CELL/2;
     const py = h.y * CELL + CELL/2;
     const r  = CELL * 0.36;
@@ -415,7 +462,7 @@ function drawHamster(h) {
     ctx.font = `bold ${CELL*0.4}px sans-serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(DIRS[h.dir], px, py);
+    ctx.fillText(DIRS[dir], px, py);
 
     // mouth count badge (if > 0)
     if (h.mouth > 0) {

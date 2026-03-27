@@ -71,6 +71,26 @@ test('runner handles variables, assignment and postfix decrement', () => {
     assert.equal(calls.filter(c => c.name === 'linksUm').length, 2);
 });
 
+test('runner executes for-loops', () => {
+    const calls = [];
+    const runtime = {
+        callBuiltin(name, args) {
+            calls.push({ name, args: [...args] });
+            return 0;
+        },
+    };
+
+    runAll(`
+        void main() {
+            for (int i = 0; i < 3; i++) {
+                vor();
+            }
+        }
+    `, runtime);
+
+    assert.equal(calls.filter(c => c.name === 'vor').length, 3);
+});
+
 test('runner throws for unknown function call', () => {
     const ast = parseProgram('void main() { missing(); }');
     const state = createRunnerState(ast, {

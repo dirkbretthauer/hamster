@@ -61,7 +61,7 @@ test('parses do-while and member calls in compatibility mode', () => {
     assert.equal(ast.functions[0].name, 'main');
 });
 
-test('accepts non-main class-like files in compatibility mode', () => {
+test('extracts class methods in compatibility mode', () => {
     const ast = parseProgram(`
         package sample;
         class Helper {
@@ -73,5 +73,36 @@ test('accepts non-main class-like files in compatibility mode', () => {
     `, { compatibility: true, requireMain: false });
 
     assert.equal(ast.type, 'Program');
-    assert.equal(ast.functions.length, 0);
+    assert.equal(ast.functions.length, 1);
+    assert.equal(ast.functions[0].name, 'max');
+    assert.equal(ast.functions[0].parameters.length, 2);
+});
+
+test('extracts class methods with array parameters in compatibility mode', () => {
+    const ast = parseProgram(`
+        class Wettlauf {
+            static Hamster durchfuehren(Hamster[] laeufer) {
+                return null;
+            }
+        }
+    `, { compatibility: true, requireMain: false });
+
+    assert.equal(ast.type, 'Program');
+    assert.equal(ast.functions.length, 1);
+    assert.equal(ast.functions[0].name, 'durchfuehren');
+    assert.equal(ast.functions[0].parameters.length, 1);
+});
+
+test('parses for-loops in compatibility mode', () => {
+    const ast = parseProgram(`
+        void main() {
+            for (int i = 0; i < 3; i++) {
+                vor();
+            }
+        }
+    `, { compatibility: true, requireMain: true });
+
+    assert.equal(ast.type, 'Program');
+    assert.equal(ast.functions.length, 1);
+    assert.equal(ast.functions[0].name, 'main');
 });
