@@ -6,39 +6,97 @@
   <title>Hamster Simulator – Die Programmier-Schule ohne Namen</title>
   <style>
     :root {
-      --accent-blue: #4a74bd;
-      --accent-blue-soft: #9bc0ff;
-      --accent-orange: #d97706;
-      --accent-orange-soft: #fbbf24;
-      --accent-orange-bg: #3b2a12;
+      --muted-gold: #c5a065;
+      --burnt-orange: #cc5500;
+
+      --bg-main: #1a2c3e;
+      --bg-panel: #213549;
+      --bg-subtle: #273c52;
+      --bg-elevated: #2b4259;
+      --text-main: #ffffff;
+      --text-muted: #d7dfeb;
+      --line-color: var(--muted-gold);
+      --accent-color: var(--burnt-orange);
+      --accent-soft: #e58d53;
+      --accent-bg: #4e3320;
+      --button-bg: #2a4056;
+      --button-bg-hover: #324b64;
+      --success-bg: #204534;
+      --success-border: #7fc79f;
+      --danger-bg: #5a2d2f;
+      --danger-border: #e8a2a2;
+      --splitter-hover: rgba(197, 160, 101, .16);
+      --splitter-dragging: rgba(204, 85, 0, .2);
+      --shadow-color: rgba(0, 0, 0, .45);
+    }
+
+    body[data-theme='light'] {
+      --bg-main: #f9f7f4;
+      --bg-panel: #ffffff;
+      --bg-subtle: #f2efe9;
+      --bg-elevated: #ece7df;
+      --text-main: #1a2c3e;
+      --text-muted: #3f4d5c;
+      --line-color: var(--muted-gold);
+      --accent-color: var(--burnt-orange);
+      --accent-soft: #cc5500;
+      --accent-bg: #f5e6db;
+      --button-bg: #f0ebe4;
+      --button-bg-hover: #e6ddd2;
+      --success-bg: #dceee2;
+      --success-border: #3f8b62;
+      --danger-bg: #f4e0df;
+      --danger-border: #b75f5f;
+      --splitter-hover: rgba(197, 160, 101, .18);
+      --splitter-dragging: rgba(204, 85, 0, .22);
+      --shadow-color: rgba(26, 44, 62, .22);
     }
 
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     body {
-      font-family: 'Segoe UI', sans-serif;
-      background: #1e1e2e;
-      color: #cdd6f4;
+      font-family: 'Linux Libertine', 'LinLibertine', 'Times New Roman', serif;
+      background: var(--bg-main);
+      color: var(--text-main);
       display: flex;
       flex-direction: column;
       height: 100vh;
       overflow: hidden;
     }
 
+    body[data-theme='light'] {
+      font-family: 'Linux Biolinum', 'LinBiolinum', 'Segoe UI', sans-serif;
+    }
+
     /* ── header ─────────────────────────────────────────── */
     header {
-      background: #181825;
+      background: var(--bg-panel);
       padding: .6rem 1rem;
       display: flex;
       align-items: center;
       gap: .8rem;
-      border-bottom: 1px solid #313244;
+      border-bottom: 1px solid var(--line-color);
       flex-shrink: 0;
     }
-    header h1 { font-size: 1.1rem; color: var(--accent-orange-soft); }
+    header h1 { font-size: 1.1rem; color: var(--accent-color); }
     header .badge {
-      font-size: .7rem; background: #45475a; padding: .2rem .5rem;
-      border-radius: 4px; color: var(--accent-orange-soft);
+      font-size: .7rem; background: var(--bg-elevated); padding: .2rem .5rem;
+      border-radius: 4px; color: var(--line-color);
+      border: 1px solid var(--line-color);
+    }
+
+    .theme-toggle {
+      margin-left: auto;
+      border-color: var(--line-color);
+      color: var(--line-color);
+      background: var(--button-bg);
+      min-width: 112px;
+      font-weight: 600;
+    }
+    .theme-toggle:hover {
+      background: var(--button-bg-hover);
+      color: var(--accent-color);
+      border-color: var(--accent-color);
     }
 
     /* ── main layout ─────────────────────────────────────── */
@@ -58,8 +116,8 @@
     #sim-wrapper {
       grid-row: 1 / 2;
       grid-column: 3 / 4;
-      background: #181825;
-      border: 1px solid #313244;
+      background: var(--bg-panel);
+      border: 1px solid var(--line-color);
       border-radius: 6px;
       display: flex;
       flex-direction: column;
@@ -77,14 +135,14 @@
       overflow: auto;
       padding: .5rem;
     }
-    canvas { box-shadow: 0 4px 20px rgba(0,0,0,.5); border-radius: 2px; }
+    canvas { box-shadow: 0 4px 20px var(--shadow-color); border-radius: 2px; }
 
     /* ── editor ──────────────────────────────────────────── */
     #editor-wrapper {
       grid-row: 1 / 4;
       grid-column: 1 / 2;
-      background: #181825;
-      border: 1px solid #313244;
+      background: var(--bg-panel);
+      border: 1px solid var(--line-color);
       border-radius: 6px;
       display: flex;
       flex-direction: column;
@@ -105,8 +163,8 @@
       min-width: 0;
       font-family: 'Consolas', 'Fira Code', monospace;
       font-size: .88rem;
-      background: #1e1e2e;
-      color: #cdd6f4;
+      background: var(--bg-main);
+      color: var(--text-main);
       border: none;
       resize: none;
       padding: .8rem;
@@ -115,8 +173,8 @@
     }
 
     #editor-activity-bar {
-      background: linear-gradient(180deg, #171826 0%, #1f1b14 100%);
-      border-right: 1px solid var(--accent-orange);
+      background: linear-gradient(180deg, var(--bg-panel) 0%, var(--bg-subtle) 100%);
+      border-right: 1px solid var(--line-color);
       padding: .45rem .3rem;
       display: flex;
       flex-direction: column;
@@ -129,10 +187,10 @@
     .activity-btn {
       min-height: 44px;
       padding: .35rem .2rem;
-      border: 1px solid #5a4630;
+      border: 1px solid var(--line-color);
       border-radius: 6px;
-      background: #2a2923;
-      color: #f4d7aa;
+      background: var(--button-bg);
+      color: var(--text-main);
       display: flex;
       flex-direction: column;
       justify-content: center;
@@ -145,43 +203,44 @@
     }
 
     .activity-btn:hover:not(:disabled) {
-      background: #3a2d1c;
-      border-color: var(--accent-orange);
-      color: var(--accent-orange-soft);
+      background: var(--button-bg-hover);
+      border-color: var(--accent-color);
+      color: var(--accent-color);
     }
 
     .activity-btn .icon {
       font-size: .88rem;
       line-height: 1;
+      color: var(--line-color);
     }
 
     .activity-btn.primary {
-      background: #1f2d4a;
-      border-color: var(--accent-blue);
-      color: var(--accent-blue-soft);
+      background: var(--bg-elevated);
+      border-color: var(--accent-color);
+      color: var(--accent-color);
     }
 
     .activity-btn.terrain {
-      background: var(--accent-orange-bg);
-      border-color: var(--accent-orange);
-      color: var(--accent-orange-soft);
+      background: var(--accent-bg);
+      border-color: var(--accent-color);
+      color: var(--accent-soft);
     }
 
     .activity-btn.success {
-      background: #173324;
-      border-color: #2f6f4d;
-      color: #89d7a9;
+      background: var(--success-bg);
+      border-color: var(--success-border);
+      color: var(--success-border);
     }
 
     .activity-btn.danger {
-      background: #3a1f1f;
-      border-color: #7a3a3a;
-      color: #f0a3a3;
+      background: var(--danger-bg);
+      border-color: var(--danger-border);
+      color: var(--danger-border);
     }
     #sources-panel {
       min-height: 0;
-      background: #151522;
-      border-right: 1px solid #313244;
+      background: var(--bg-subtle);
+      border-right: 1px solid var(--line-color);
       display: flex;
       flex-direction: column;
       font-size: .78rem;
@@ -190,20 +249,20 @@
     #sources-panel .explorer-title {
       padding: .45rem .7rem;
       font-size: .68rem;
-      color: #6c7086;
+      color: var(--text-muted);
       letter-spacing: .06em;
       text-transform: uppercase;
-      border-bottom: 1px solid #23243a;
-      background: #11121d;
+      border-bottom: 1px solid var(--line-color);
+      background: var(--bg-elevated);
       position: sticky;
       top: 0;
       z-index: 1;
     }
     #sources-folder {
-      color: #8ea8d8;
+      color: var(--text-main);
       padding: .45rem .7rem;
-      border-bottom: 1px solid #23243a;
-      background: #141524;
+      border-bottom: 1px solid var(--line-color);
+      background: var(--bg-panel);
       word-break: break-word;
     }
     #sources-list {
@@ -217,7 +276,7 @@
     }
     #sources-list .tree-row {
       font-family: 'Consolas', 'Fira Code', monospace;
-      color: #cdd6f4;
+      color: var(--text-main);
       min-height: 22px;
       display: flex;
       align-items: center;
@@ -226,11 +285,11 @@
       border-radius: 4px;
     }
     #sources-list .tree-row:hover {
-      background: #1d1f31;
+      background: var(--bg-elevated);
     }
     #sources-list .tree-row.active {
-      background: #263450;
-      box-shadow: inset 0 0 0 1px #4a74bd;
+      background: var(--bg-elevated);
+      box-shadow: inset 0 0 0 1px var(--accent-color);
     }
     #sources-list .tree-row.interactive {
       cursor: pointer;
@@ -243,7 +302,7 @@
     #sources-list .tree-icon {
       width: 14px;
       text-align: center;
-      color: #7f86a8;
+      color: var(--line-color);
       flex-shrink: 0;
     }
     #sources-list .tree-name {
@@ -251,7 +310,7 @@
     }
     #sources-list .tree-node.kind-dir > .tree-row .tree-name { color: #9fc5ff; }
     #sources-list .tree-node.kind-ham > .tree-row .tree-name { color: #a6e3a1; }
-    #sources-list .tree-node.kind-ter > .tree-row .tree-name { color: var(--accent-orange-soft); }
+    #sources-list .tree-node.kind-ter > .tree-row .tree-name { color: var(--accent-color); }
     #sources-list .tree-node.kind-txt > .tree-row .tree-name { color: #bac2de; }
     #sources-list .tree-children {
       list-style: none;
@@ -262,7 +321,7 @@
       display: none;
     }
     #sources-empty {
-      color: #6c7086;
+      color: var(--text-muted);
       font-style: italic;
       padding: .45rem .7rem;
     }
@@ -271,8 +330,8 @@
     #log-wrapper {
       grid-row: 3 / 4;
       grid-column: 3 / 4;
-      background: #181825;
-      border: 1px solid #313244;
+      background: var(--bg-panel);
+      border: 1px solid var(--line-color);
       border-radius: 6px;
       display: flex;
       flex-direction: column;
@@ -280,7 +339,7 @@
     }
 
     .splitter {
-      background: #212334;
+      background: var(--bg-elevated);
       position: relative;
       z-index: 2;
       user-select: none;
@@ -293,29 +352,29 @@
       background: transparent;
       transition: background .15s;
     }
-    .splitter:hover::after { background: rgba(203, 166, 247, .12); }
-    .splitter.dragging::after { background: rgba(203, 166, 247, .22); }
+    .splitter:hover::after { background: var(--splitter-hover); }
+    .splitter.dragging::after { background: var(--splitter-dragging); }
 
     #v-splitter {
       grid-row: 1 / 4;
       grid-column: 2 / 3;
       cursor: col-resize;
-      border-left: 1px solid #313244;
-      border-right: 1px solid #313244;
+      border-left: 1px solid var(--line-color);
+      border-right: 1px solid var(--line-color);
     }
 
     #h-splitter {
       grid-row: 2 / 3;
       grid-column: 3 / 4;
       cursor: row-resize;
-      border-top: 1px solid #313244;
-      border-bottom: 1px solid #313244;
+      border-top: 1px solid var(--line-color);
+      border-bottom: 1px solid var(--line-color);
     }
 
     #files-splitter {
       cursor: col-resize;
-      border-left: 1px solid #313244;
-      border-right: 1px solid #313244;
+      border-left: 1px solid var(--line-color);
+      border-right: 1px solid var(--line-color);
     }
     #log {
       flex: 1;
@@ -332,29 +391,29 @@
     /* ── buttons ─────────────────────────────────────────── */
     button {
       padding: .35rem .75rem;
-      border: 1px solid #45475a;
+      border: 1px solid var(--line-color);
       border-radius: 4px;
-      background: #313244;
-      color: #cdd6f4;
+      background: var(--button-bg);
+      color: var(--text-main);
       cursor: pointer;
       font-size: .82rem;
       transition: background .15s;
     }
-    button:hover   { background: #45475a; }
-    button.primary { background: #7c3aed; border-color: #7c3aed; color: #fff; }
-    button.primary:hover { background: #6d28d9; }
-    button.success { background: #166534; border-color: #4ade80; color: #4ade80; }
-    button.success:hover { background: #14532d; }
-    button.danger  { background: #7f1d1d; border-color: #f87171; color: #f87171; }
+    button:hover   { background: var(--button-bg-hover); }
+    button.primary { background: var(--accent-color); border-color: var(--accent-color); color: #fff; }
+    button.primary:hover { background: #a84500; }
+    button.success { background: var(--success-bg); border-color: var(--success-border); color: var(--success-border); }
+    button.success:hover { filter: brightness(.95); }
+    button.danger  { background: var(--danger-bg); border-color: var(--danger-border); color: var(--danger-border); }
     button:disabled { opacity: .4; cursor: default; }
 
     button.terrain-accent {
-      background: var(--accent-orange-bg);
-      border-color: var(--accent-orange);
-      color: var(--accent-orange-soft);
+      background: var(--accent-bg);
+      border-color: var(--accent-color);
+      color: var(--accent-soft);
     }
     button.terrain-accent:hover {
-      background: #4a3415;
+      filter: brightness(.96);
     }
 
     /* ── toolbar ─────────────────────────────────────────── */
@@ -362,31 +421,31 @@
       display: flex;
       gap: .4rem;
       padding: .4rem .6rem;
-      background: #181825;
-      border-bottom: 1px solid #313244;
+      background: var(--bg-panel);
+      border-bottom: 1px solid var(--line-color);
       flex-wrap: wrap;
       align-items: center;
       flex-shrink: 0;
       width: 100%;
     }
-    #toolbar label { font-size: .8rem; color: #6c7086; }
+    #toolbar label { font-size: .8rem; color: var(--text-muted); }
     .tool-group { display: flex; align-items: center; gap: .3rem; flex-wrap: wrap; }
     .tool-button {
-      background: #27293b;
-      border: 1px solid #3c3f55;
+      background: var(--button-bg);
+      border: 1px solid var(--line-color);
       padding: .3rem .6rem;
       font-size: .75rem;
     }
-    .tool-button.active { background: var(--accent-orange); color: #1e1e2e; border-color: var(--accent-orange-soft); }
-    #corn-amount { width: 56px; background: #1e1e2e; color: #cdd6f4; border: 1px solid #45475a; border-radius: 4px; padding: .2rem .3rem; }
-    #hover-info { font-size: .75rem; color: #a6adc8; min-width: 180px; }
-    #terrain-size  { background: #1e1e2e; color: #cdd6f4; border: 1px solid #45475a;
+    .tool-button.active { background: var(--accent-color); color: #fff; border-color: var(--accent-color); }
+    #corn-amount { width: 56px; background: var(--bg-main); color: var(--text-main); border: 1px solid var(--line-color); border-radius: 4px; padding: .2rem .3rem; }
+    #hover-info { font-size: .75rem; color: var(--text-muted); min-width: 180px; }
+    #terrain-size  { background: var(--bg-main); color: var(--text-main); border: 1px solid var(--line-color);
                      padding: .2rem .4rem; border-radius: 4px; width: 50px; font-size: .82rem; }
-    #speed-range   { width: 90px; accent-color: var(--accent-orange); }
-    #status        { margin-left: auto; font-size: .78rem; color: #6c7086; }
+    #speed-range   { width: 90px; accent-color: var(--accent-color); }
+    #status        { margin-left: auto; font-size: .78rem; color: var(--text-muted); }
 
-    .panel-title { padding: .4rem .8rem; font-size: .8rem; color: #89b4fa;
-                   background: #1e1e2e; border-bottom: 1px solid #313244; }
+    .panel-title { padding: .4rem .8rem; font-size: .8rem; color: var(--accent-color);
+                   background: var(--bg-main); border-bottom: 1px solid var(--line-color); }
 
     /* ── terminal input overlay ──────────────────────────── */
     #terminal-overlay {
@@ -399,15 +458,15 @@
     }
     #terminal-overlay.visible { display: flex; }
     #terminal-box {
-      background: #181825;
-      border: 1px solid #cba6f7;
+      background: var(--bg-panel);
+      border: 1px solid var(--line-color);
       border-radius: 8px;
       padding: 1.5rem;
       width: 380px;
     }
-    #terminal-prompt { margin-bottom: .6rem; color: #f9e2af; font-size: .9rem; }
-    #terminal-input  { width: 100%; background: #1e1e2e; color: #cdd6f4;
-                       border: 1px solid #45475a; border-radius: 4px;
+    #terminal-prompt { margin-bottom: .6rem; color: var(--accent-color); font-size: .9rem; }
+    #terminal-input  { width: 100%; background: var(--bg-main); color: var(--text-main);
+               border: 1px solid var(--line-color); border-radius: 4px;
                        padding: .4rem; font-family: monospace; }
   </style>
 </head>
@@ -416,6 +475,7 @@
 <header>
   <h1>🐹 Hamster Simulator</h1>
   <span class="badge">Die Programmier-Schule ohne Namen</span>
+  <button id="btn-theme-toggle" class="theme-toggle" type="button" aria-label="Toggle theme">Light Theme</button>
   <span id="loading-msg" style="font-size:.8rem;color:#f38ba8">Loading engine…</span>
 </header>
 
@@ -460,18 +520,18 @@ void main() {
 
   <section id="sim-wrapper">
     <div id="toolbar">
-      <label>W <input id="ter-w" type="number" class="terrain-size" value="10" min="1" max="30" style="width:50px;background:#1e1e2e;color:#cdd6f4;border:1px solid #45475a;padding:.2rem .4rem;border-radius:4px;font-size:.82rem;"></label>
-      <label>H <input id="ter-h" type="number" class="terrain-size" value="8"  min="1" max="20" style="width:50px;background:#1e1e2e;color:#cdd6f4;border:1px solid #45475a;padding:.2rem .4rem;border-radius:4px;font-size:.82rem;"></label>
+      <label>W <input id="ter-w" type="number" class="terrain-size" value="10" min="1" max="30" style="width:50px;background:var(--bg-main);color:var(--text-main);border:1px solid var(--line-color);padding:.2rem .4rem;border-radius:4px;font-size:.82rem;"></label>
+      <label>H <input id="ter-h" type="number" class="terrain-size" value="8"  min="1" max="20" style="width:50px;background:var(--bg-main);color:var(--text-main);border:1px solid var(--line-color);padding:.2rem .4rem;border-radius:4px;font-size:.82rem;"></label>
       <button id="btn-new" class="terrain-accent">New Terrain</button>
       <label style="margin-left:.5rem">Speed <input id="speed-range" type="range" min="50" max="1000" value="400" step="50"></label>
       <div class="tool-group" style="margin-left:.5rem">
-        <span style="font-size:.75rem;color:#6c7086;margin-right:.2rem">Edit</span>
+        <span style="font-size:.75rem;color:var(--text-muted);margin-right:.2rem">Edit</span>
         <button class="tool-button active" data-tool="wall">Wall</button>
         <button class="tool-button" data-tool="erase">Erase</button>
         <button class="tool-button" data-tool="corn">Corn</button>
         <button class="tool-button" data-tool="hamster">Move</button>
         <button class="tool-button" data-tool="rotate">Rotate</button>
-        <label style="font-size:.75rem;color:#6c7086;display:flex;align-items:center;gap:.2rem">Corn
+        <label style="font-size:.75rem;color:var(--text-muted);display:flex;align-items:center;gap:.2rem">Corn
           <input id="corn-amount" type="number" min="0" value="1">
         </label>
         <span id="hover-info">Row –, Col –</span>
@@ -516,6 +576,7 @@ import {
   compileProgram, stepProgram, runProgram, stopProgram,
   setStepCallback, hasPendingProgram, terrainToTer
 } from './hamster-ui.js';
+import JSZip from './assets/vendor/jszip.esm.js';
 
 // ─── DOM refs ────────────────────────────────────────────────
 const canvas       = document.getElementById('sim-canvas');
@@ -537,6 +598,7 @@ const btnStop      = document.getElementById('btn-stop');
 const btnReset     = document.getElementById('btn-reset');
 const btnLoadFolder = document.getElementById('btn-load-folder');
 const btnExportProgram = document.getElementById('btn-export-program');
+const btnThemeToggle = document.getElementById('btn-theme-toggle');
 const speedRange   = document.getElementById('speed-range');
 const terW         = document.getElementById('ter-w');
 const terH         = document.getElementById('ter-h');
@@ -551,6 +613,52 @@ const mainLayout   = document.querySelector('main');
 const vSplitter    = document.getElementById('v-splitter');
 const hSplitter    = document.getElementById('h-splitter');
 const filesSplitter = document.getElementById('files-splitter');
+
+const THEME_STORAGE_KEY = 'hamster-ui-theme';
+
+function getPreferredTheme() {
+  const saved = window.localStorage.getItem(THEME_STORAGE_KEY);
+  if (saved === 'dark' || saved === 'light') return saved;
+  return 'dark';
+}
+
+function updateThemeToggleLabel(theme) {
+  if (!btnThemeToggle) return;
+  const nextTheme = theme === 'dark' ? 'light' : 'dark';
+  btnThemeToggle.textContent = nextTheme === 'dark' ? 'Dark Theme' : 'Light Theme';
+  btnThemeToggle.setAttribute('aria-label', `Switch to ${nextTheme} theme`);
+}
+
+function applyTheme(theme, persist = true) {
+  const normalized = theme === 'light' ? 'light' : 'dark';
+  document.body.setAttribute('data-theme', normalized);
+  updateThemeToggleLabel(normalized);
+  if (persist) {
+    window.localStorage.setItem(THEME_STORAGE_KEY, normalized);
+  }
+}
+
+btnThemeToggle?.addEventListener('click', () => {
+  const current = document.body.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
+  const next = current === 'dark' ? 'light' : 'dark';
+  applyTheme(next);
+});
+
+applyTheme(getPreferredTheme(), false);
+
+const fallbackDirectoryInput = document.createElement('input');
+fallbackDirectoryInput.type = 'file';
+fallbackDirectoryInput.multiple = true;
+fallbackDirectoryInput.setAttribute('webkitdirectory', '');
+fallbackDirectoryInput.setAttribute('directory', '');
+fallbackDirectoryInput.style.display = 'none';
+document.body.appendChild(fallbackDirectoryInput);
+
+const zipProgramInput = document.createElement('input');
+zipProgramInput.type = 'file';
+zipProgramInput.accept = '.zip,application/zip,application/x-zip-compressed';
+zipProgramInput.style.display = 'none';
+document.body.appendChild(zipProgramInput);
 
 let currentState   = null;
 let currentTool    = 'wall';
@@ -653,16 +761,33 @@ btnNew.addEventListener('click', () => {
 
 // ─── program file workflow ─────────────────────────────────────────
 btnLoadFolder?.addEventListener('click', async () => {
-  if (typeof window.showDirectoryPicker !== 'function') {
-    setStatus('Load Folder is not supported in this browser.');
-    return;
-  }
   try {
-    const dirHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
-    await loadProgramFromDirectory(dirHandle);
+    if (typeof window.showDirectoryPicker === 'function') {
+      const dirHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
+      await loadProgramFromDirectory(dirHandle);
+      return;
+    }
+
+    const pickedFiles = await pickFilesFromLegacyDirectoryInput();
+    if (pickedFiles.length > 0) {
+      loadedProgramFolderHandle = null;
+      await loadProgramFromFiles(pickedFiles, {
+        fromFolder: true,
+        folderName: getTopLevelFolderNameFromRelativePaths(pickedFiles.map(file => file.webkitRelativePath || file.name)),
+        folderHandle: null,
+      });
+      return;
+    }
+
+    const zipFile = await pickZipArchive();
+    if (!zipFile) {
+      setStatus('Folder import cancelled');
+      return;
+    }
+    await loadProgramFromZip(zipFile);
   } catch (err) {
     if (err?.name === 'AbortError') {
-      setStatus('Folder selection cancelled');
+      setStatus('Folder import cancelled');
       return;
     }
     console.error(err);
@@ -1308,6 +1433,119 @@ function getCommonPathPrefix(paths) {
   }
 
   return common.join('/');
+}
+
+function getTopLevelFolderNameFromRelativePaths(paths) {
+  const firstSegment = (paths || [])
+    .map(path => String(path || '').trim().replace(/\\+/g, '/'))
+    .map(path => path.split('/').filter(Boolean)[0] || '')
+    .find(Boolean);
+  return firstSegment || 'folder';
+}
+
+function pickFilesFromLegacyDirectoryInput() {
+  return new Promise(resolve => {
+    const hasLegacyDirectorySupport = 'webkitdirectory' in fallbackDirectoryInput;
+    if (!hasLegacyDirectorySupport) {
+      resolve([]);
+      return;
+    }
+
+    let settled = false;
+    const finish = files => {
+      if (settled) return;
+      settled = true;
+      fallbackDirectoryInput.removeEventListener('change', onChange);
+      window.removeEventListener('focus', onWindowFocus);
+      resolve(files);
+    };
+
+    const onChange = () => {
+      const files = Array.from(fallbackDirectoryInput.files || []);
+      fallbackDirectoryInput.value = '';
+      finish(files);
+    };
+
+    const onWindowFocus = () => {
+      // Browsers that do not emit a cancel event still regain focus after picker close.
+      window.setTimeout(() => {
+        if (settled) return;
+        const files = Array.from(fallbackDirectoryInput.files || []);
+        fallbackDirectoryInput.value = '';
+        finish(files);
+      }, 200);
+    };
+
+    fallbackDirectoryInput.addEventListener('change', onChange, { once: true });
+    window.addEventListener('focus', onWindowFocus, { once: true });
+    fallbackDirectoryInput.click();
+  });
+}
+
+function pickZipArchive() {
+  return new Promise(resolve => {
+    let settled = false;
+    const finish = file => {
+      if (settled) return;
+      settled = true;
+      zipProgramInput.removeEventListener('change', onChange);
+      window.removeEventListener('focus', onWindowFocus);
+      resolve(file || null);
+    };
+
+    const onChange = () => {
+      const file = (zipProgramInput.files && zipProgramInput.files[0]) || null;
+      zipProgramInput.value = '';
+      finish(file);
+    };
+
+    const onWindowFocus = () => {
+      // Resolve even when the picker is cancelled and no change event is fired.
+      window.setTimeout(() => {
+        if (settled) return;
+        const file = (zipProgramInput.files && zipProgramInput.files[0]) || null;
+        zipProgramInput.value = '';
+        finish(file);
+      }, 200);
+    };
+
+    zipProgramInput.addEventListener('change', onChange, { once: true });
+    window.addEventListener('focus', onWindowFocus, { once: true });
+    zipProgramInput.click();
+  });
+}
+
+async function loadProgramFromZip(zipFile) {
+  const buffer = await zipFile.arrayBuffer();
+  const zip = await JSZip.loadAsync(buffer);
+  const zipEntries = [];
+
+  zip.forEach((relativePath, entry) => {
+    const normalizedPath = String(relativePath || '').replace(/\\+/g, '/');
+    if (!normalizedPath || entry.dir) return;
+    if (normalizedPath.startsWith('__MACOSX/')) return;
+    if (!/\.(ham|ter)$/i.test(normalizedPath)) return;
+    zipEntries.push({ path: normalizedPath, entry });
+  });
+
+  if (zipEntries.length === 0) {
+    throw new Error('No .ham or .ter files found in ZIP archive');
+  }
+
+  const files = await Promise.all(zipEntries.map(async item => {
+    const text = await item.entry.async('string');
+    const filename = getFilenameFromPath(item.path) || 'program.ham';
+    const file = new File([text], filename, { type: 'text/plain' });
+    return { file, path: item.path };
+  }));
+
+  loadedProgramFolderHandle = null;
+  const zipName = getBasenameWithoutExtension(zipFile.name || 'archive') || 'archive';
+  await loadProgramFromFiles(files, {
+    fromFolder: true,
+    folderName: zipName,
+    folderHandle: null,
+  });
 }
 
 function resolveLoadedFolderPath(fileEntries, options = {}) {
