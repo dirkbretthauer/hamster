@@ -456,3 +456,225 @@ test('runner can evaluate string equals via runtime callMethod hook', () => {
 
     assert.deepEqual(calls, ['linksUm']);
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// A1/B step-model tests — verify instruction-level stepping behaviour
+// ═══════════════════════════════════════════════════════════════════════════
+
+function countSteps(program, runtime) {
+    const ast = parseProgram(program);
+    const state = createRunnerState(ast, runtime);
+    let steps = 0;
+    let guard = 0;
+    while (!state.finished && guard++ < 10000) {
+        const more = executeRunnerStep(state);
+        if (!more) break;
+        steps++;
+    }
+    return steps;
+}
+
+test('non-hamster statements are invisible (zero steps)', () => {
+    // A program with no hamster calls should produce zero visible steps.
+    const steps = countSteps(`
+        void main() {
+            int x = 3 + 4;
+            int y = x * 2;
+            boolean b = y > 10;
+        }
+    `, { callBuiltin() { return 0; } });
+
+    assert.equal(steps, 0);
+});
+
+test('one step per hamster instruction at top level', () => {
+    const steps = countSteps(`
+        void main() {
+            vor();
+            linksUm();
+            vor();
+        }
+    `, { callBuiltin() { return 0; } });
+
+    assert.equal(steps, 3);
+});
+
+test('variable decl between hamster calls does not count as step', () => {
+    const steps = countSteps(`
+        void main() {
+            vor();
+            int x = 3;
+            linksUm();
+        }
+    `, { callBuiltin() { return 0; } });
+
+    assert.equal(steps, 2);
+});
+
+test('user-defined void function is transparent — each internal instruction is a step', () => {
+    // rechtsUm() contains 3 linksUm() calls → 3 visible steps, not 1.
+    const calls = [];
+    const steps = countSteps(`
+        void main() {
+            rechtsUm();
+        }
+
+        void rechtsUm() {
+            linksUm();
+            linksUm();
+            linksUm();
+        }
+    `, {
+        callBuiltin(name) { calls.push(name); return 0; },
+    });
+
+    assert.equal(steps, 3);
+    assert.equal(calls.filter(c => c === 'linksUm').length, 3);
+});
+
+test('compound hamster command (DopingHamster pattern) produces multiple steps', () => {
+    // DopingHamster.vor() calls: super.vor(), vornFrei(), and maybe super.vor()
+    let freeCount = 0;
+    const calls = [];
+    const steps = countSteps(`
+        void main() {
+            dopingVor();
+        }
+
+        void dopingVor() {
+            vor();
+            if (vornFrei()) {
+                vor();
+            }
+        }
+    `, {
+        callBuiltin(name) {
+            calls.push(name);
+            if (name === 'vornFrei') {
+                freeCount++;
+                return freeCount <= 1; // first call → true
+            }
+            return 0;
+        },
+    });
+
+    // vor() + vornFrei() + vor() = 3 visible steps
+    assert.equal(steps, 3);
+    assert.deepEqual(calls, ['vor', 'vornFrei', 'vor']);
+});
+
+test('query in while condition counts as a step', () => {
+    let freeCount = 0;
+    const calls = [];
+    const steps = countSteps(`
+        void main() {
+            while (vornFrei()) {
+                vor();
+            }
+        }
+    `, {
+        callBuiltin(name) {
+            calls.push(name);
+            if (name === 'vornFrei') {
+                freeCount++;
+                return freeCount <= 2;
+            }
+            return 0;
+        },
+    });
+
+    // vornFrei(true) + vor() + vornFrei(true) + vor() + vornFrei(false) = 5 steps
+    assert.equal(steps, 5);
+});
+
+test('recursive function with hamster calls produces correct step count', () => {
+    let freeCount = 0;
+    const calls = [];
+    const steps = countSteps(`
+        void main() {
+            laufe();
+        }
+
+        void laufe() {
+            if (vornFrei()) {
+                vor();
+                laufe();
+            }
+        }
+    `, {
+        callBuiltin(name) {
+            calls.push(name);
+            if (name === 'vornFrei') {
+                freeCount++;
+                return freeCount <= 2;
+            }
+            return 0;
+        },
+    });
+
+    // vornFrei(true) + vor() + vornFrei(true) + vor() + vornFrei(false) = 5 steps
+    assert.equal(steps, 5);
+});
+
+test('pure arithmetic function produces zero steps', () => {
+    // twice(3) has no hamster calls → 0 steps from it;
+    // the while loop calls vor() 6 times → 6 steps total
+    const steps = countSteps(`
+        void main() {
+            int c = twice(3);
+            while (c > 0) {
+                vor();
+                c = c - 1;
+            }
+        }
+
+        int twice(int x) {
+            return x + x;
+        }
+    `, { callBuiltin() { return 0; } });
+
+    assert.equal(steps, 6);
+});
+
+test('generator state is preserved across pause/resume (RunnerPause)', () => {
+    let inputReady = false;
+    const calls = [];
+    const ast = parseProgram(`
+        void main() {
+            vor();
+            int n = readInt();
+            linksUm();
+        }
+    `);
+
+    const state = createRunnerState(ast, {
+        callBuiltin(name) {
+            calls.push(name);
+            if (name === 'readInt') {
+                if (!inputReady) throw new RunnerPause('need input');
+                return 42;
+            }
+            return 0;
+        },
+    });
+
+    // Step 1: vor()
+    assert.equal(executeRunnerStep(state), true);
+    assert.deepEqual(calls, ['vor']);
+
+    // Step 2: readInt() → pauses
+    assert.throws(() => executeRunnerStep(state), RunnerPause);
+    assert.deepEqual(calls, ['vor', 'readInt']);
+
+    // Provide input and resume
+    inputReady = true;
+    // readInt() retries and succeeds → yields as instruction step
+    assert.equal(executeRunnerStep(state), true);
+
+    // Step 3: linksUm()
+    assert.equal(executeRunnerStep(state), true);
+
+    // Done
+    assert.equal(executeRunnerStep(state), false);
+    assert.equal(state.finished, true);
+});

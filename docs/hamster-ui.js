@@ -829,8 +829,13 @@ export function runProgram(delayMs = 400) {
     tick();
 }
 
-/** Interrupt a running program. */
+/** Pause a running program – execution state is preserved so it can resume. */
 export function stopProgram() {
+    if (runTimerId !== null) { clearTimeout(runTimerId); runTimerId = null; }
+}
+
+/** Abort a running program and discard all execution state. */
+export function abortProgram() {
     if (runTimerId !== null) { clearTimeout(runTimerId); runTimerId = null; }
     runnerState = null;
 }

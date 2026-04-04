@@ -573,7 +573,7 @@ import {
   engine,
   initCanvas, render,
   initLog, appendLog, clearLog,
-  compileProgram, stepProgram, runProgram, stopProgram,
+  compileProgram, stepProgram, runProgram, stopProgram, abortProgram,
   setStepCallback, hasPendingProgram, terrainToTer
 } from './hamster-ui.js';
 import JSZip from './assets/vendor/jszip.esm.js';
@@ -950,6 +950,25 @@ btnExportProgram?.addEventListener('click', async () => {
 
 // ─── program controls ─────────────────────────────────────────
 btnRun.addEventListener('click', () => {
+  // If there is a paused program, resume it instead of recompiling.
+  if (hasPendingProgram()) {
+    setStatus('Running…');
+    btnRun.disabled  = true;
+    btnStep.disabled = true;
+    btnStop.disabled = false;
+    runProgram(parseInt(speedRange.value, 10));
+    const timer = setInterval(() => {
+      if (!hasPendingProgram()) {
+            clearInterval(timer);
+            btnRun.disabled  = false;
+            btnStep.disabled = false;
+            btnStop.disabled = true;
+            setStatus('Finished');
+        }
+    }, 200);
+    return;
+  }
+
   clearExecutionLog();
     engine.start();
   resetProgramText = editor.value ?? '';
@@ -1001,11 +1020,11 @@ btnStop.addEventListener('click', () => {
     btnRun.disabled  = false;
     btnStep.disabled = false;
     btnStop.disabled = true;
-    setStatus('Stopped');
+    setStatus('Paused');
 });
 
 btnReset.addEventListener('click', () => {
-    stopProgram();
+    abortProgram();
     const state = engine.reset();
     if (typeof resetProgramText === 'string' && resetProgramText.length > 0) {
       editor.value = resetProgramText;
