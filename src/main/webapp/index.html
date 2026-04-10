@@ -152,9 +152,22 @@
       --files-pane-width: calc((100% - 58px - 8px) / 4);
       flex: 1;
       display: grid;
-      grid-template-columns: 58px minmax(160px, var(--files-pane-width)) 8px minmax(200px, 1fr);
+      grid-template-columns: 58px minmax(160px, var(--files-pane-width)) 8px auto minmax(200px, 1fr);
       min-height: 0;
       overflow: hidden;
+    }
+    #line-numbers {
+      background: var(--bg-panel);
+      color: var(--text-muted, #888);
+      font-family: 'Consolas', 'Fira Code', monospace;
+      font-size: .88rem;
+      line-height: 1.55;
+      padding: .8rem .5rem .8rem .4rem;
+      text-align: right;
+      user-select: none;
+      overflow: hidden;
+      border-right: 1px solid var(--line-color);
+      white-space: pre;
     }
 
     #editor {
@@ -502,6 +515,7 @@
 
       <div id="files-splitter" class="splitter" role="separator" aria-label="Resize files and program"></div>
 
+      <div id="line-numbers" aria-hidden="true"></div>
       <textarea id="editor" spellcheck="false">// Example hamster program in classic .ham syntax
 void main() {
   while (vornFrei()) {
@@ -584,6 +598,7 @@ const logEl        = document.getElementById('log');
 const statusEl     = document.getElementById('status');
 const loadingMsg   = document.getElementById('loading-msg');
 const editor       = document.getElementById('editor');
+const lineNumbers  = document.getElementById('line-numbers');
 const overlay      = document.getElementById('terminal-overlay');
 const termPrompt   = document.getElementById('terminal-prompt');
 const termInput    = document.getElementById('terminal-input');
@@ -615,6 +630,20 @@ const hSplitter    = document.getElementById('h-splitter');
 const filesSplitter = document.getElementById('files-splitter');
 
 const THEME_STORAGE_KEY = 'hamster-ui-theme';
+
+// ─── Line numbers ────────────────────────────────────────────
+function updateLineNumbers() {
+  const lineCount = editor.value.split('\n').length;
+  const nums = [];
+  for (let i = 1; i <= lineCount; i++) nums.push(i);
+  lineNumbers.textContent = nums.join('\n');
+}
+function syncLineNumberScroll() {
+  lineNumbers.scrollTop = editor.scrollTop;
+}
+editor.addEventListener('input', updateLineNumbers);
+editor.addEventListener('scroll', syncLineNumberScroll);
+updateLineNumbers();
 
 function getPreferredTheme() {
   const saved = window.localStorage.getItem(THEME_STORAGE_KEY);
@@ -1028,6 +1057,7 @@ btnReset.addEventListener('click', () => {
     const state = engine.reset();
     if (typeof resetProgramText === 'string' && resetProgramText.length > 0) {
       editor.value = resetProgramText;
+      updateLineNumbers();
     }
     overlay.classList.remove('visible');
     termInput.value = '';
@@ -1127,6 +1157,7 @@ function setActiveProgramByPath(path, options = {}) {
 
   selectedProgramPath = normalizedPath;
   editor.value = String(target.text ?? '');
+  updateLineNumbers();
   currentProgramFilename = ensureHamExtension(getFilenameFromPath(target.path) || currentProgramFilename);
   refreshCompanionPrograms();
   updateLoadedSourcesPanel();
